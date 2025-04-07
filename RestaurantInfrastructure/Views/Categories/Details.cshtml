@@ -1,0 +1,24 @@
+﻿@model RestaurantDomain.Models.Category
+
+@{
+    ViewData["Title"] = "Деталі категорії";
+}
+
+<h1>Деталі</h1>
+
+<div>
+    <h4>Категорія</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Description)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Description)
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
+    <a asp-action="Index">Повернутися до списку</a>
+</div>

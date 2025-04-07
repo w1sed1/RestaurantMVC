@@ -1,0 +1,2878 @@
+# RestaurantDomain Project
+==================================================
+// ==== RestaurantDomain.csproj ====
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>
+
+
+// ==== Model\Category.cs ====
+using RestaurantDomain.Model;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
+namespace RestaurantDomain.Models;
+
+public partial class Category : Entity
+{
+    [Display(Name = "Опис")]
+    public string Description { get; set; } = null!;
+
+    public virtual ICollection<Dish> Dishes { get; set; } = new List<Dish>();
+}
+
+
+// ==== Model\Cook.cs ====
+using RestaurantDomain.Model;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
+namespace RestaurantDomain.Models;
+
+public partial class Cook : Entity
+{
+    public int RestaurantId { get; set; }
+
+    [Display(Name = "Прізвище")]
+    public string Surname { get; set; } = null!;
+
+    [Display(Name = "Дата народження")]
+    public DateOnly? DateOfBirth { get; set; }
+
+    [Display(Name = "Ресторан")]
+    public virtual Restaurant Restaurant { get; set; } = null!;
+
+    public virtual ICollection<Dish> Dishes { get; set; } = new List<Dish>();
+}
+
+
+// ==== Model\Dish.cs ====
+using RestaurantDomain.Model;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
+namespace RestaurantDomain.Models;
+
+public partial class Dish : Entity
+{
+    [Display(Name = "Назва")]
+    public string Name { get; set; } = null!; // Додаємо поле для назви страви
+
+    [Display(Name = "Ціна")]
+    public decimal Price { get; set; }
+
+    [Display(Name = "Рецепт")]
+    public string? Receipt { get; set; }
+
+    [Display(Name = "Калорії")]
+    public int? Calories { get; set; }
+
+    public int CategoryId { get; set; }
+
+    [Display(Name = "Категорія")]
+    public virtual Category Category { get; set; } = null!;
+
+    public virtual ICollection<Cook> Cooks { get; set; } = new List<Cook>();
+
+    public virtual ICollection<Ingredient> Ingredients { get; set; } = new List<Ingredient>();
+}
+
+
+// ==== Model\Entity.cs ====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace RestaurantDomain.Model
+{
+    public abstract class Entity
+    {
+        public int Id { get; set; }
+    }
+}
+
+
+// ==== Model\Ingredient.cs ====
+using RestaurantDomain.Model;
+using System.ComponentModel.DataAnnotations;
+
+namespace RestaurantDomain.Models;
+
+public partial class Ingredient : Entity
+{
+    [Display(Name = "Назва")]
+    public string Name { get; set; } = null!;
+
+    [Display(Name = "Вага/об'єм")]
+    public string? WeightMeasure { get; set; }
+
+    [Display(Name = "Калорії")]
+    public int? Calories { get; set; }
+
+    public virtual ICollection<Dish> Dishes { get; set; } = new List<Dish>();
+}
+
+
+// ==== Model\Restaurant.cs ====
+using RestaurantDomain.Model;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
+namespace RestaurantDomain.Models;
+
+public partial class Restaurant : Entity
+{
+    [Display(Name = "Локація")]
+    public string Name { get; set; } = null!;
+
+    [Display(Name = "Контакти")]
+    public string? Contacts { get; set; }
+
+    [Display(Name = "Відгуки")]
+    public string? Reviews { get; set; }
+
+    public virtual ICollection<Cook> Cooks { get; set; } = new List<Cook>();
+}
+
+
+# RestaurantInfrastructure Project
+==================================================
+// ==== appsettings.json ====
+{
+    "ConnectionStrings": {
+        "DefaultConnection": "Server=DESKTOP-D2I193F\\SQLEXPRESS;Database=RestaurantDB;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"
+    },
+    "Logging": {
+        "LogLevel": {
+            "Default": "Information",
+            "Microsoft.AspNetCore": "Warning"
+        }
+    },
+    "AllowedHosts": "*"
+}
+
+// ==== Program.cs ====
+using Microsoft.EntityFrameworkCore;
+using RestaurantInfrastructure;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddControllersWithViews();
+
+//          RestaurantDbContext
+builder.Services.AddDbContext<RestaurantDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseRouting();
+
+app.UseAuthorization();
+
+app.MapStaticAssets();
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Home}/{action=Index}/{id?}")
+    .WithStaticAssets();
+
+app.Run();
+
+// ==== Controllers\CategoriesController.cs ====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using RestaurantDomain.Models;
+using RestaurantInfrastructure;
+
+namespace RestaurantInfrastructure.Controllers
+{
+    public class CategoriesController : Controller
+    {
+        private readonly RestaurantDbContext _context;
+
+        public CategoriesController(RestaurantDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET: Categories
+        public async Task<IActionResult> Index()
+        {
+            return View(await _context.Categories.ToListAsync());
+        }
+
+        // GET: Categories/Details/5
+        public async Task<IActionResult> Details(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var category = await _context.Categories
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (category == null)
+            {
+                return NotFound();
+            }
+
+            return View(category);
+        }
+
+        // GET: Categories/Create
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+        // POST: Categories/Create
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Description,Id")] Category category)
+        {
+            if (ModelState.IsValid)
+            {
+                _context.Add(category);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            return View(category);
+        }
+
+        // GET: Categories/Edit/5
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var category = await _context.Categories.FindAsync(id);
+            if (category == null)
+            {
+                return NotFound();
+            }
+            return View(category);
+        }
+
+        // POST: Categories/Edit/5
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, [Bind("Description,Id")] Category category)
+        {
+            if (id != category.Id)
+            {
+                return NotFound();
+            }
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    _context.Update(category);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!CategoryExists(category.Id))
+                    {
+                        return NotFound();
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            return View(category);
+        }
+
+        // GET: Categories/Delete/5
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var category = await _context.Categories
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (category == null)
+            {
+                return NotFound();
+            }
+
+            return View(category);
+        }
+
+        // POST: Categories/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            var category = await _context.Categories.FindAsync(id);
+            if (category != null)
+            {
+                _context.Categories.Remove(category);
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool CategoryExists(int id)
+        {
+            return _context.Categories.Any(e => e.Id == id);
+        }
+    }
+}
+
+
+// ==== Controllers\CooksController.cs ====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using RestaurantDomain.Models;
+using RestaurantInfrastructure;
+
+namespace RestaurantInfrastructure.Controllers
+{
+    public class CooksController : Controller
+    {
+        private readonly RestaurantDbContext _context;
+
+        public CooksController(RestaurantDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET: Cooks
+        public async Task<IActionResult> Index()
+        {
+            var restaurantDbContext = _context.Cooks
+                .Include(c => c.Restaurant)
+                .Include(c => c.Dishes); // Додаємо Include для страв
+            return View(await restaurantDbContext.ToListAsync());
+        }
+
+        // GET: Cooks/Details/5
+        public async Task<IActionResult> Details(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var cook = await _context.Cooks
+                .Include(c => c.Restaurant)
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (cook == null)
+            {
+                return NotFound();
+            }
+
+            return View(cook);
+        }
+
+        // GET: Cooks/Create
+        public IActionResult Create()
+        {
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name");
+            return View();
+        }
+
+        // POST: Cooks/Create
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
+        {
+            ModelState.Remove("Surname");
+            ModelState.Remove("Restaurant");
+            if (ModelState.IsValid)
+            {
+                _context.Add(cook);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
+            return View(cook);
+        }
+
+        // GET: Cooks/Edit/5
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var cook = await _context.Cooks
+                .Include(c => c.Restaurant)
+                .Include(c => c.Dishes) // Завантажуємо поточні страви кухаря
+                .FirstOrDefaultAsync(m => m.Id == id);
+
+            if (cook == null)
+            {
+                return NotFound();
+            }
+
+            // Передаємо список ресторанів для вибору
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
+
+            // Передаємо список усіх страв для вибору (з ID і Name)
+            ViewData["Dishes"] = new MultiSelectList(_context.Dishes, "Id", "Name", cook.Dishes.Select(d => d.Id));
+
+            return View(cook);
+        }
+
+        // POST: Cooks/Edit/5
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Surname,DateOfBirth,RestaurantId")] Cook cook, int[] selectedDishes)
+        {
+            if (id != cook.Id)
+            {
+                return NotFound();
+            }
+            ModelState.Remove("Surname");
+            ModelState.Remove("Restaurant");
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    // Завантажуємо існуючого кухаря з бази разом із його стравами
+                    var cookToUpdate = await _context.Cooks
+                        .Include(c => c.Dishes)
+                        .FirstOrDefaultAsync(c => c.Id == id);
+
+                    if (cookToUpdate == null)
+                    {
+                        return NotFound();
+                    }
+
+                    // Оновлюємо основні поля кухаря
+                    cookToUpdate.Surname = cook.Surname;
+                    cookToUpdate.DateOfBirth = cook.DateOfBirth;
+                    cookToUpdate.RestaurantId = cook.RestaurantId;
+
+                    // Оновлюємо список страв
+                    // Спочатку очищаємо поточні страви
+                    cookToUpdate.Dishes.Clear();
+
+                    // Додаємо нові страви, які вибрав користувач
+                    if (selectedDishes != null)
+                    {
+                        var dishesToAdd = await _context.Dishes
+                            .Where(d => selectedDishes.Contains(d.Id))
+                            .ToListAsync();
+                        foreach (var dish in dishesToAdd)
+                        {
+                            cookToUpdate.Dishes.Add(dish);
+                        }
+                    }
+
+                    // Зберігаємо зміни
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!CookExists(cook.Id))
+                    {
+                        return NotFound();
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Якщо модель невалідна, повертаємо форму з даними
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
+            ViewData["Dishes"] = new MultiSelectList(_context.Dishes, "Id", "Name", selectedDishes);
+            return View(cook);
+        }
+        // GET: Cooks/Delete/5
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var cook = await _context.Cooks
+                .Include(c => c.Restaurant)
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (cook == null)
+            {
+                return NotFound();
+            }
+
+            return View(cook);
+        }
+
+        // POST: Cooks/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            var cook = await _context.Cooks.FindAsync(id);
+            if (cook != null)
+            {
+                _context.Cooks.Remove(cook);
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool CookExists(int id)
+        {
+            return _context.Cooks.Any(e => e.Id == id);
+        }
+    }
+}
+
+
+// ==== Controllers\DishesController.cs ====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using RestaurantDomain.Models;
+using RestaurantInfrastructure;
+
+namespace RestaurantInfrastructure.Controllers
+{
+    public class DishesController : Controller
+    {
+        private readonly RestaurantDbContext _context;
+
+        public DishesController(RestaurantDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET: Dishes
+        public async Task<IActionResult> Index()
+        {
+            if (_context == null)
+            {
+                return Problem("Entity set 'RestaurantDbContext' is null.");
+            }
+
+            return View(await _context.Dishes
+                .Include(d => d.Category)
+                .Include(d => d.Cooks)
+                .Include(d => d.Ingredients)
+                .ToListAsync());
+        }
+
+        // GET: Dishes/Details/5
+        public async Task<IActionResult> Details(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var dish = await _context.Dishes
+                .Include(d => d.Category)
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (dish == null)
+            {
+                return NotFound();
+            }
+
+            return View(dish);
+        }
+
+        // GET: Dishes/Create
+        public IActionResult Create()
+        {
+            ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description");
+            return View();
+        }
+
+        // POST: Dishes/Create
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish)
+        {
+            ModelState.Remove("Name");
+            ModelState.Remove("Category");
+            if (ModelState.IsValid)
+            {
+                _context.Add(dish);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
+            return View(dish);
+        }
+
+        // GET: Dishes/Edit/5
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var dish = await _context.Dishes.FindAsync(id);
+            if (dish == null)
+            {
+                return NotFound();
+            }
+            ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
+            return View(dish);
+        }
+
+        // POST: Dishes/Edit/5
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, [Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish)
+        {
+            if (id != dish.Id)
+            {
+                return NotFound();
+            }
+            ModelState.Remove("Name");
+            ModelState.Remove("Category");
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    _context.Update(dish);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!DishExists(dish.Id))
+                    {
+                        return NotFound();
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
+            return View(dish);
+        }
+
+        // GET: Dishes/Delete/5
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var dish = await _context.Dishes
+                .Include(d => d.Category)
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (dish == null)
+            {
+                return NotFound();
+            }
+
+            return View(dish);
+        }
+
+        // POST: Dishes/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            var dish = await _context.Dishes.FindAsync(id);
+            if (dish != null)
+            {
+                _context.Dishes.Remove(dish);
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool DishExists(int id)
+        {
+            return _context.Dishes.Any(e => e.Id == id);
+        }
+    }
+}
+
+// ==== Controllers\HomeController.cs ====
+using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using RestaurantInfrastructure.Models;
+
+namespace RestaurantInfrastructure.Controllers;
+
+public class HomeController : Controller
+{
+    private readonly ILogger<HomeController> _logger;
+
+    public HomeController(ILogger<HomeController> logger)
+    {
+        _logger = logger;
+    }
+
+    public IActionResult Index()
+    {
+        return View();
+    }
+
+    public IActionResult Privacy()
+    {
+        return View();
+    }
+
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    public IActionResult Error()
+    {
+        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+    }
+}
+
+
+// ==== Controllers\IngredientsController.cs ====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using RestaurantDomain.Models;
+using RestaurantInfrastructure;
+
+namespace RestaurantInfrastructure.Controllers
+{
+    public class IngredientsController : Controller
+    {
+        private readonly RestaurantDbContext _context;
+
+        public IngredientsController(RestaurantDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET: Ingredients
+        public async Task<IActionResult> Index()
+        {
+            if (_context == null || _context.Ingredients == null)
+            {
+                return Problem("Entity set 'RestaurantDbContext.Ingredients' is null.");
+            }
+            return View(await _context.Ingredients.ToListAsync());
+        }
+
+        // GET: Ingredients/Details/5
+        public async Task<IActionResult> Details(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var ingredient = await _context.Ingredients
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (ingredient == null)
+            {
+                return NotFound();
+            }
+
+            return View(ingredient);
+        }
+
+        // GET: Ingredients/Create
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+        // POST: Ingredients/Create
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
+        {
+            ModelState.Remove("Name");
+            if (ModelState.IsValid)
+            {
+                _context.Add(ingredient);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            return View(ingredient);
+        }
+
+        // GET: Ingredients/Edit/5
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var ingredient = await _context.Ingredients.FindAsync(id);
+            if (ingredient == null)
+            {
+                return NotFound();
+            }
+            return View(ingredient);
+        }
+
+        // POST: Ingredients/Edit/5
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, [Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
+        {
+            if (id != ingredient.Id)
+            {
+                return NotFound();
+            }
+            ModelState.Remove("Name");
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    _context.Update(ingredient);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!IngredientExists(ingredient.Id))
+                    {
+                        return NotFound();
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            return View(ingredient);
+        }
+        // GET: Ingredients/Delete/5
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var ingredient = await _context.Ingredients
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (ingredient == null)
+            {
+                return NotFound();
+            }
+
+            return View(ingredient);
+        }
+
+        // POST: Ingredients/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            var ingredient = await _context.Ingredients.FindAsync(id);
+            if (ingredient != null)
+            {
+                _context.Ingredients.Remove(ingredient);
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool IngredientExists(int id)
+        {
+            return _context.Ingredients.Any(e => e.Id == id);
+        }
+    }
+}
+
+// ==== Controllers\RestaurantsController.cs ====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using RestaurantDomain.Models;
+using RestaurantInfrastructure;
+
+namespace RestaurantInfrastructure.Controllers
+{
+    public class RestaurantsController : Controller
+    {
+        private readonly RestaurantDbContext _context;
+
+        public RestaurantsController(RestaurantDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET: Restaurants
+        public async Task<IActionResult> Index()
+        {
+            return View(await _context.Restaurants.ToListAsync());
+        }
+
+        // GET: Restaurants/Details/5
+        public async Task<IActionResult> Details(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var restaurant = await _context.Restaurants
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (restaurant == null)
+            {
+                return NotFound();
+            }
+
+            return View(restaurant);
+        }
+
+        // GET: Restaurants/Create
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+        // POST: Restaurants/Create
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
+        {
+
+            ModelState.Remove("Name");
+            if (ModelState.IsValid)
+            {
+                _context.Add(restaurant);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            return View(restaurant);
+        }
+
+        // GET: Restaurants/Edit/5
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var restaurant = await _context.Restaurants.FindAsync(id);
+            if (restaurant == null)
+            {
+                return NotFound();
+            }
+            return View(restaurant);
+        }
+
+        // POST: Restaurants/Edit/5
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, [Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
+        {
+            if (id != restaurant.Id)
+            {
+                return NotFound();
+            }
+            ModelState.Remove("Name");
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    _context.Update(restaurant);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!RestaurantExists(restaurant.Id))
+                    {
+                        return NotFound();
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            return View(restaurant);
+        }
+
+        // GET: Restaurants/Delete/5
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var restaurant = await _context.Restaurants
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (restaurant == null)
+            {
+                return NotFound();
+            }
+
+            return View(restaurant);
+        }
+
+        // POST: Restaurants/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            var restaurant = await _context.Restaurants.FindAsync(id);
+            if (restaurant != null)
+            {
+                _context.Restaurants.Remove(restaurant);
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool RestaurantExists(int id)
+        {
+            return _context.Restaurants.Any(e => e.Id == id);
+        }
+    }
+}
+
+// ==== Models\ErrorViewModel.cs ====
+namespace RestaurantInfrastructure.Models
+{
+    public class ErrorViewModel
+    {
+        public string? RequestId { get; set; }
+
+        public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+    }
+}
+
+
+// ==== Views\_ViewImports.cshtml ====
+@using RestaurantInfrastructure
+@using RestaurantInfrastructure.Models
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+// ==== Views\_ViewStart.cshtml ====
+@{
+    Layout = "_Layout";
+}
+
+
+// ==== Views\Categories\Create.cshtml ====
+@model RestaurantDomain.Models.Category
+
+@{
+    ViewData["Title"] = "Додати категорію";
+}
+
+<h1>Додати</h1>
+
+<h4>Категорія</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Description" class="control-label"></label>
+                <input asp-for="Description" class="form-control" />
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Додати" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+
+// ==== Views\Categories\Delete.cshtml ====
+@model RestaurantDomain.Models.Category
+
+@{
+    ViewData["Title"] = "Видалити категорію";
+}
+
+<h1>Видалити</h1>
+
+<h3>Ви впевнені, що хочете видалити цю категорію?</h3>
+<div>
+    <h4>Категорія</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Description)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Description)
+        </dd>
+    </dl>
+
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        <input type="submit" value="Видалити" class="btn btn-danger" /> |
+        <a asp-action="Index">Повернутися до списку</a>
+    </form>
+</div>
+
+
+// ==== Views\Categories\Details.cshtml ====
+@model RestaurantDomain.Models.Category
+
+@{
+    ViewData["Title"] = "Деталі категорії";
+}
+
+<h1>Деталі</h1>
+
+<div>
+    <h4>Категорія</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Description)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Description)
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+
+// ==== Views\Categories\Edit.cshtml ====
+@model RestaurantDomain.Models.Category
+
+@{
+    ViewData["Title"] = "Редагувати категорію";
+}
+
+<h1>Редагувати</h1>
+
+<h4>Категорія</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Description" class="control-label"></label>
+                <input asp-for="Description" class="form-control" />
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <input type="submit" value="Зберегти" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+
+// ==== Views\Categories\Index.cshtml ====
+@model IEnumerable<RestaurantDomain.Models.Category>
+
+@{
+    ViewData["Title"] = "Категорії";
+}
+
+<h1>Категорії</h1>
+
+<p>
+    <a asp-action="Create" class="btn btn-primary">Додати нову категорію</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Description)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Description)
+                </td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
+                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+// ==== Views\Cooks\Create.cshtml ====
+@model RestaurantDomain.Models.Cook
+
+@{
+    ViewData["Title"] = "Додати кухаря";
+}
+
+<h1>Додати</h1>
+
+<h4>Кухар</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="RestaurantId" class="control-label"></label>
+                <select asp-for="RestaurantId" class="form-control" asp-items="ViewBag.RestaurantId"></select>
+            </div>
+            <div class="form-group">
+                <label asp-for="Surname" class="control-label"></label>
+                <input asp-for="Surname" class="form-control" />
+                <span asp-validation-for="Surname" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="DateOfBirth" class="control-label"></label>
+                <input asp-for="DateOfBirth" class="form-control" />
+                <span asp-validation-for="DateOfBirth" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Додати" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+
+// ==== Views\Cooks\Delete.cshtml ====
+@model RestaurantDomain.Models.Cook
+
+@{
+    ViewData["Title"] = "Видалити кухаря";
+}
+
+<h1>Видалити</h1>
+
+<h3>Ви впевнені, що хочете видалити цього кухаря?</h3>
+<div>
+    <h4>Кухар</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Surname)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Surname)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.DateOfBirth)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.DateOfBirth)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Restaurant)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Restaurant.Name)
+        </dd>
+    </dl>
+
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        <input type="submit" value="Видалити" class="btn btn-danger" /> |
+        <a asp-action="Index">Повернутися до списку</a>
+    </form>
+</div>
+
+
+// ==== Views\Cooks\Details.cshtml ====
+@model RestaurantDomain.Models.Cook
+
+@{
+    ViewData["Title"] = "Деталі кухаря";
+}
+
+<h1>Деталі</h1>
+
+<div>
+    <h4>Кухар</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Surname)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Surname)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.DateOfBirth)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.DateOfBirth)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Restaurant)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Restaurant.Name)
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+
+// ==== Views\Cooks\Edit.cshtml ====
+@model RestaurantDomain.Models.Cook
+
+@{
+    ViewData["Title"] = "Редагувати кухаря";
+}
+
+<h1>Редагувати</h1>
+
+<h4>Кухар</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <label asp-for="Surname" class="control-label"></label>
+                <input asp-for="Surname" class="form-control" />
+                <span asp-validation-for="Surname" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="DateOfBirth" class="control-label"></label>
+                <input asp-for="DateOfBirth" class="form-control" />
+                <span asp-validation-for="DateOfBirth" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="RestaurantId" class="control-label"></label>
+                <select asp-for="RestaurantId" class="form-control" asp-items="ViewBag.RestaurantId"></select>
+                <span asp-validation-for="RestaurantId" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label class="control-label">Страви</label>
+                <select name="selectedDishes" multiple class="form-control" asp-items="ViewBag.Dishes"></select>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Зберегти" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+
+// ==== Views\Cooks\Index.cshtml ====
+@model IEnumerable<RestaurantDomain.Models.Cook>
+
+@{
+    ViewData["Title"] = "Кухарі";
+}
+
+<h1>Кухарі</h1>
+
+<p>
+    <a asp-action="Create" class="btn btn-primary">Додати нового кухаря</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Surname)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.DateOfBirth)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Restaurant)
+            </th>
+            <th>
+                Страви
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Surname)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.DateOfBirth)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Restaurant.Name)
+                </td>
+                <td>
+                    @if (item.Dishes.Any())
+                    {
+                        <ul>
+                            @foreach (var dish in item.Dishes)
+                            {
+                                <li>@dish.Name</li> <!-- Замінюємо Price і Receipt на Name -->
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span>Немає призначених страв</span>
+                    }
+                </td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
+                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+
+// ==== Views\Dishes\Create.cshtml ====
+@model RestaurantDomain.Models.Dish
+
+@{
+    ViewData["Title"] = "Додати страву";
+}
+
+<h1>Додати</h1>
+
+<h4>Страва</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Price" class="control-label"></label>
+                <input asp-for="Price" class="form-control" />
+                <span asp-validation-for="Price" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Receipt" class="control-label"></label>
+                <input asp-for="Receipt" class="form-control" />
+                <span asp-validation-for="Receipt" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Calories" class="control-label"></label>
+                <input asp-for="Calories" class="form-control" />
+                <span asp-validation-for="Calories" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="CategoryId" class="control-label"></label>
+                <select asp-for="CategoryId" class="form-control" asp-items="ViewBag.CategoryId"></select>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Додати" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+
+// ==== Views\Dishes\Delete.cshtml ====
+@model RestaurantDomain.Models.Dish
+
+@{
+    ViewData["Title"] = "Видалити страву";
+}
+
+<h1>Видалити</h1>
+
+<h3>Ви впевнені, що хочете видалити цю страву?</h3>
+<div>
+    <h4>Страва</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Name)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Price)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Price)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Receipt)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Receipt)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Calories)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Calories)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Category)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Category.Description)
+        </dd>
+    </dl>
+
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        <input type="submit" value="Видалити" class="btn btn-danger" /> |
+        <a asp-action="Index">Повернутися до списку</a>
+    </form>
+</div>
+
+
+// ==== Views\Dishes\Details.cshtml ====
+@model RestaurantDomain.Models.Dish
+
+@{
+    ViewData["Title"] = "Деталі страви";
+}
+
+<h1>Деталі</h1>
+
+<div>
+    <h4>Страва</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Name)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Price)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Price)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Receipt)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Receipt)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Calories)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Calories)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Category)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Category.Description)
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+// ==== Views\Dishes\Edit.cshtml ====
+@model RestaurantDomain.Models.Dish
+
+@{
+    ViewData["Title"] = "Редагувати страву";
+}
+
+<h1>Редагувати</h1>
+
+<h4>Страва</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Price" class="control-label"></label>
+                <input asp-for="Price" class="form-control" />
+                <span asp-validation-for="Price" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Receipt" class="control-label"></label>
+                <input asp-for="Receipt" class="form-control" />
+                <span asp-validation-for="Receipt" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Calories" class="control-label"></label>
+                <input asp-for="Calories" class="form-control" />
+                <span asp-validation-for="Calories" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="CategoryId" class="control-label"></label>
+                <select asp-for="CategoryId" class="form-control" asp-items="ViewBag.CategoryId"></select>
+                <span asp-validation-for="CategoryId" class="text-danger"></span>
+            </div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <input type="submit" value="Зберегти" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+// ==== Views\Dishes\Index.cshtml ====
+@model IEnumerable<RestaurantDomain.Models.Dish>
+
+@{
+    ViewData["Title"] = "Страви";
+}
+
+<h1>Страви</h1>
+
+<p>
+    <a asp-action="Create" class="btn btn-primary">Додати нову страву</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Name)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Price)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Receipt)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Calories)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Category)
+            </th>
+            <th>
+                Кухарі
+            </th>
+            <th>
+                Інгредієнти
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Name)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Price)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Receipt)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Calories)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Category.Description)
+                </td>
+                <td>
+                    @if (item.Cooks.Any())
+                    {
+                        <ul>
+                            @foreach (var cook in item.Cooks)
+                            {
+                                <li>@cook.Surname</li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span>Немає призначених кухарів</span>
+                    }
+                </td>
+                <td>
+                    @if (item.Ingredients.Any())
+                    {
+                        <ul>
+                            @foreach (var ingredient in item.Ingredients)
+                            {
+                                <li>@ingredient.Name</li> <!-- Замінюємо WeightMeasure і Calories на Name -->
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span>Немає призначених інгредієнтів</span>
+                    }
+                </td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
+                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+
+// ==== Views\Home\Index.cshtml ====
+@{
+    ViewData["Title"] = "Ласкаво просимо до Ресторану";
+}
+
+<div class="text-center">
+    <h1 class="display-4 mb-5">Сом Валера вітає!</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <canvas id="pieChart" width="400" height="400"></canvas>
+    </div>
+    <div class="col-md-6 mb-4">
+        <canvas id="barChart" width="400" height="400"></canvas>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Кругова діаграма
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        const pieChart = new Chart(pieCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Супи', 'Основні страви', 'Десерти', 'Напої'],
+                datasets: [{
+                    label: 'Розподіл страв за категоріями',
+                    data: [25, 35, 20, 20], // Приклад даних у відсотках
+                    backgroundColor: [
+                        '#ff5733', // Яскравий червоно-помаранчевий (супи)
+                        '#33d17a', // Соковитий зелений (основні страви)
+                        '#ffcc00', // Яскравий жовтий (десерти)
+                        '#1e90ff'  // Насичений синій (напої)
+                    ],
+                    borderColor: '#ffffff', // Білий контур для контрасту
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Розподіл страв за категоріями'
+                    }
+                }
+            }
+        });
+
+        // Звичайна діаграма
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        const barChart = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Ресторан 1', 'Ресторан 2', 'Ресторан 3'],
+                datasets: [{
+                    label: 'Кількість кухарів',
+                    data: [5, 8, 3], // Приклад даних
+                    backgroundColor: [
+                        '#ff2d55', // Яскравий рожево-червоний
+                        '#00ccff', // Світло-блакитний
+                        '#ffaa00'  // Помаранчевий
+                    ],
+                    borderColor: '#ffffff', // Білий контур
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Кількість кухарів'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Ресторани'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Кількість кухарів у ресторанах'
+                    }
+                }
+            }
+        });
+    </script>
+}
+
+// ==== Views\Home\Privacy.cshtml ====
+@{
+    ViewData["Title"] = "Політика конфіденційності";
+}
+
+<h1>@ViewData["Title"]</h1>
+
+<p>На цій сторінці ви можете детально ознайомитися з політикою конфіденційності нашого сайту.</p>
+
+
+// ==== Views\Ingredients\Create.cshtml ====
+@model RestaurantDomain.Models.Ingredient
+
+@{
+    ViewData["Title"] = "Додати інгредієнт";
+}
+
+<h1>Додати</h1>
+
+<h4>Інгредієнт</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="WeightMeasure" class="control-label"></label>
+                <input asp-for="WeightMeasure" class="form-control" />
+                <span asp-validation-for="WeightMeasure" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Calories" class="control-label"></label>
+                <input asp-for="Calories" class="form-control" />
+                <span asp-validation-for="Calories" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Додати" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+// ==== Views\Ingredients\Delete.cshtml ====
+@model RestaurantDomain.Models.Ingredient
+
+@{
+    ViewData["Title"] = "Видалити інгредієнт";
+}
+
+<h1>Видалити</h1>
+
+<h3>Ви впевнені, що хочете видалити цей інгредієнт?</h3>
+<div>
+    <h4>Інгредієнт</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Name)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.WeightMeasure)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.WeightMeasure)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Calories)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Calories)
+        </dd>
+    </dl>
+
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        <input type="submit" value="Видалити" class="btn btn-danger" /> |
+        <a asp-action="Index">Повернутися до списку</a>
+    </form>
+</div>
+
+
+// ==== Views\Ingredients\Details.cshtml ====
+@model RestaurantDomain.Models.Ingredient
+
+@{
+    ViewData["Title"] = "Деталі інгредієнта";
+}
+
+<h1>Деталі</h1>
+
+<div>
+    <h4>Інгредієнт</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Name)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.WeightMeasure)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.WeightMeasure)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Calories)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Calories)
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+
+// ==== Views\Ingredients\Edit.cshtml ====
+@model RestaurantDomain.Models.Ingredient
+
+@{
+    ViewData["Title"] = "Редагувати інгредієнт";
+}
+
+<h1>Редагувати</h1>
+
+<h4>Інгредієнт</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="WeightMeasure" class="control-label"></label>
+                <input asp-for="WeightMeasure" class="form-control" />
+                <span asp-validation-for="WeightMeasure" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Calories" class="control-label"></label>
+                <input asp-for="Calories" class="form-control" />
+                <span asp-validation-for="Calories" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Зберегти" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+
+// ==== Views\Ingredients\Index.cshtml ====
+@model IEnumerable<RestaurantDomain.Models.Ingredient>
+
+@{
+    ViewData["Title"] = "Інгредієнти";
+}
+
+<h1>Інгредієнти</h1>
+
+<p>
+    <a asp-action="Create" class="btn btn-primary">Додати новий інгредієнт</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Name)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.WeightMeasure)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Calories)
+            </th>
+            <th>
+                Страви
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Name)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.WeightMeasure)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Calories)
+                </td>
+                <td>
+                    @if (item.Dishes.Any())
+                    {
+                        <ul>
+                            @foreach (var dish in item.Dishes)
+                            {
+                                <li>@dish.Name</li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span>Немає призначених страв</span>
+                    }
+                </td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
+                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+// ==== Views\Restaurants\Create.cshtml ====
+@model RestaurantDomain.Models.Restaurant
+
+@{
+    ViewData["Title"] = "Додати ресторан";
+}
+
+<h1>Додати</h1>
+
+<h4>Ресторан</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Contacts" class="control-label"></label>
+                <input asp-for="Contacts" class="form-control" />
+                <span asp-validation-for="Contacts" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Reviews" class="control-label"></label>
+                <input asp-for="Reviews" class="form-control" />
+                <span asp-validation-for="Reviews" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Додати" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+
+// ==== Views\Restaurants\Delete.cshtml ====
+@model RestaurantDomain.Models.Restaurant
+
+@{
+    ViewData["Title"] = "Видалити ресторан";
+}
+
+<h1>Видалити</h1>
+
+<h3>Ви впевнені, що хочете видалити цей ресторан?</h3>
+<div>
+    <h4>Ресторан</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Name)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Contacts)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Contacts)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Reviews)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Reviews)
+        </dd>
+    </dl>
+
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        <input type="submit" value="Видалити" class="btn btn-danger" /> |
+        <a asp-action="Index">Повернутися до списку</a>
+    </form>
+</div>
+
+
+// ==== Views\Restaurants\Details.cshtml ====
+@model RestaurantDomain.Models.Restaurant
+
+@{
+    ViewData["Title"] = "Деталі ресторану";
+}
+
+<h1>Деталі</h1>
+
+<div>
+    <h4>Ресторан</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Name)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Contacts)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Contacts)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Reviews)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Reviews)
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+
+// ==== Views\Restaurants\Edit.cshtml ====
+@model RestaurantDomain.Models.Restaurant
+
+@{
+    ViewData["Title"] = "Редагувати ресторан";
+}
+
+<h1>Редагувати</h1>
+
+<h4>Ресторан</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Contacts" class="control-label"></label>
+                <input asp-for="Contacts" class="form-control" />
+                <span asp-validation-for="Contacts" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Reviews" class="control-label"></label>
+                <input asp-for="Reviews" class="form-control" />
+                <span asp-validation-for="Reviews" class="text-danger"></span>
+            </div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <input type="submit" value="Зберегти" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
+
+// ==== Views\Restaurants\Index.cshtml ====
+@model IEnumerable<RestaurantDomain.Models.Restaurant>
+
+@{
+    ViewData["Title"] = "Ресторани";
+}
+
+<h1>Ресторани</h1>
+
+<p>
+    <a asp-action="Create" class="btn btn-primary">Додати новий ресторан</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Name)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Contacts)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Reviews)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Name)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Contacts)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Reviews)
+                </td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
+                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+
+// ==== Views\Shared\Error.cshtml ====
+@model ErrorViewModel
+@{
+    ViewData["Title"] = "Помилка";
+}
+
+<h1 class="text-danger">Помилка.</h1>
+<h2 class="text-danger">Під час обробки вашого запиту сталася помилка.</h2>
+
+@if (Model.ShowRequestId)
+{
+    <p>
+        <strong>ID запиту:</strong> <code>@Model.RequestId</code>
+    </p>
+}
+
+<h3>Режим розробки</h3>
+<p>
+    Перехід у <strong>режим розробки</strong> дозволить відобразити детальнішу інформацію про помилку, що сталася.
+</p>
+<p>
+    <strong>Режим розробки не слід вмикати для розгорнутих додатків.</strong>
+    Це може призвести до відображення конфіденційної інформації про винятки кінцевим користувачам.
+    Для локального налагодження увімкніть <strong>режим розробки</strong>, встановивши змінну середовища <strong>ASPNETCORE_ENVIRONMENT</strong> на <strong>Development</strong>
+    і перезапустіть додаток.
+</p>
+
+// ==== Views\Shared\_Layout.cshtml ====
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Сом Валера</title>
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/RestaurantInfrastructure.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Сом Валера</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                        aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Головна</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Restaurants" asp-action="Index">Ресторани</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Cooks" asp-action="Index">Кухарі</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Dishes" asp-action="Index">Страви</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Categories" asp-action="Index">Категорії</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Ingredients" asp-action="Index">Інгредієнти</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Конфіденційність</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            © 2025 - Сом Валера - <a asp-area="" asp-controller="Home" asp-action="Privacy">Конфіденційність</a>
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+
+
+
+// ==== Views\Shared\_Layout.cshtml.css ====
+/* Please see documentation at https://learn.microsoft.com/aspnet/core/client-side/bundling-and-minification
+for details on configuring this project to bundle and minify static web assets. */
+
+a.navbar-brand {
+  white-space: normal;
+  text-align: center;
+  word-break: break-all;
+}
+
+a {
+  color: #0077cc;
+}
+
+.btn-primary {
+  color: #fff;
+  background-color: #1b6ec2;
+  border-color: #1861ac;
+}
+
+.nav-pills .nav-link.active, .nav-pills .show > .nav-link {
+  color: #fff;
+  background-color: #1b6ec2;
+  border-color: #1861ac;
+}
+
+.border-top {
+  border-top: 1px solid #e5e5e5;
+}
+.border-bottom {
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.box-shadow {
+  box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .05);
+}
+
+button.accept-policy {
+  font-size: 1rem;
+  line-height: inherit;
+}
+
+.footer {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  white-space: nowrap;
+  line-height: 60px;
+}
+
+
+// ==== Views\Shared\_ValidationScriptsPartial.cshtml ====
+<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+<script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js"></script>
+
+
+
+
+
+
+// ==== wwwroot\css\site.css ====
+html {
+    font-size: 14px;
+    position: relative;
+    min-height: 100%;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+body {
+    margin-bottom: 60px;
+    background-color: #f5f1e9; /*                        */
+    color: #5c4b3f; /*                    -                      */
+    font-family: 'Arial', sans-serif;
+}
+
+/*                 */
+.btn-primary {
+    background-color: #d4c2a6; /*                          */
+    border-color: #d4c2a6;
+    color: #5c4b3f;
+}
+
+    .btn-primary:hover {
+        background-color: #c0a88b; /*                               */
+        border-color: #c0a88b;
+    }
+
+/*                           */
+.navbar {
+    background-color: #e8d9c2; /*                         */
+}
+
+.navbar-brand, .nav-link {
+    color: #5c4b3f !important; /*                                 */
+}
+
+    .nav-link:hover {
+        color: #a68a64 !important; /*                    */
+    }
+
+/*                  */
+.table {
+    background-color: #fffcf7; /*                        */
+    border: 1px solid #e8d9c2;
+}
+
+    .table th, .table td {
+        border: 1px solid #e8d9c2;
+    }
+
+    .table th {
+        background-color: #d4c2a6; /*                           */
+        color: #5c4b3f;
+    }
+
+/*                 (         ,                      ) */
+.card {
+    background-color: #fffcf7;
+    border: 1px solid #e8d9c2;
+    border-radius: 10px;
+    transition: transform 0.2s;
+}
+
+    .card:hover {
+        transform: scale(1.05);
+    }
+
+.card-title {
+    color: #5c4b3f;
+}
+
+.card-text {
+    color: #7a6b5d;
+}
+
+/*                 */
+.footer {
+    background-color: #e8d9c2;
+    color: #5c4b3f;
+}
+
+/*                   */
+a {
+    color: #a68a64;
+}
+
+    a:hover {
+        color: #7a6b5d;
+    }
+
+.form-control {
+    border: 1px solid #e8d9c2;
+    background-color: #fffcf7;
+}
+
+    .form-control:focus {
+        border-color: #d4c2a6;
+        box-shadow: 0 0 0 0.2rem rgba(212, 194, 166, 0.25);
+    }
+
+/*          placeholder */
+.form-floating > .form-control-plaintext::placeholder,
+.form-floating > .form-control::placeholder {
+    color: var(--bs-secondary-color);
+    text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder,
+.form-floating > .form-control:focus::placeholder {
+    text-align: start;
+}
+
+
+// ==== wwwroot\js\site.js ====
+// Please see documentation at https://learn.microsoft.com/aspnet/core/client-side/bundling-and-minification
+// for details on configuring this project to bundle and minify static web assets.
+
+// Write your JavaScript code.
+// ==== RestaurantDbContext.cs ====
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using RestaurantDomain.Models;
+
+namespace RestaurantInfrastructure
+{
+    public partial class RestaurantDbContext : DbContext
+    {
+        public RestaurantDbContext(DbContextOptions<RestaurantDbContext> options)
+            : base(options)
+        {
+        }
+
+        public virtual DbSet<Category> Categories { get; set; }
+        public virtual DbSet<Cook> Cooks { get; set; }
+        public virtual DbSet<Dish> Dishes { get; set; }
+        public virtual DbSet<Ingredient> Ingredients { get; set; }
+        public virtual DbSet<Restaurant> Restaurants { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Category>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("PK__Categori__3214EC07DBFD7161");
+                entity.Property(e => e.Description).HasMaxLength(100);
+            });
+
+            modelBuilder.Entity<Cook>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("PK__Cooks__3214EC075F8F54F4");
+                entity.Property(e => e.Surname).HasMaxLength(50);
+
+                entity.HasOne(d => d.Restaurant)
+                    .WithMany(p => p.Cooks)
+                    .HasForeignKey(d => d.RestaurantId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK__Cooks__Restauran__3B75D760");
+
+                entity.HasMany(d => d.Dishes)
+                    .WithMany(p => p.Cooks)
+                    .UsingEntity<Dictionary<string, object>>(
+                        "CookDishes",
+                        r => r.HasOne<Dish>()
+                            .WithMany()
+                            .HasForeignKey("DishId")
+                            .OnDelete(DeleteBehavior.ClientSetNull)
+                            .HasConstraintName("FK__CookDishe__DishI__440B1D61"),
+                        l => l.HasOne<Cook>()
+                            .WithMany()
+                            .HasForeignKey("CookId")
+                            .OnDelete(DeleteBehavior.ClientSetNull)
+                            .HasConstraintName("FK__CookDishe__CookI__4316F928"),
+                        j =>
+                        {
+                            j.HasKey("CookId", "DishId").HasName("PK__CookDish__F4903394A5BC686B");
+                        });
+            });
+
+            modelBuilder.Entity<Dish>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("PK__Dishes__3214EC07E6E03191");
+                entity.Property(e => e.Name).HasMaxLength(100);
+                entity.Property(e => e.Price).HasColumnType("decimal(10, 2)");
+                entity.Property(e => e.Receipt).HasMaxLength(500);
+
+                entity.HasOne(d => d.Category)
+                    .WithMany(p => p.Dishes)
+                    .HasForeignKey(d => d.CategoryId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK__Dishes__Category__3E52440B");
+
+                entity.HasMany(d => d.Ingredients)
+                    .WithMany(p => p.Dishes)
+                    .UsingEntity<Dictionary<string, object>>(
+                        "DishIngredients",
+                        r => r.HasOne<Ingredient>()
+                            .WithMany()
+                            .HasForeignKey("IngredientId")
+                            .OnDelete(DeleteBehavior.ClientSetNull)
+                            .HasConstraintName("FK__DishIngre__Ingre__47DBAE45"),
+                        l => l.HasOne<Dish>()
+                            .WithMany()
+                            .HasForeignKey("DishId")
+                            .OnDelete(DeleteBehavior.ClientSetNull)
+                            .HasConstraintName("FK__DishIngre__DishI__46E78A0C"),
+                        j =>
+                        {
+                            j.HasKey("DishId", "IngredientId").HasName("PK__DishIngr__A369A4752A665EE3");
+                        });
+            });
+
+            modelBuilder.Entity<Ingredient>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("PK__Ingredie__3214EC07DD41F209");
+                entity.Property(e => e.Name).HasMaxLength(100);
+
+                // Налаштування конвертації для WeightMeasure
+                var weightMeasureConverter = new ValueConverter<string?, decimal?>(
+                    v => v == null ? null : decimal.Parse(v), // Конвертація string -> decimal
+                    v => v.HasValue ? v.Value.ToString("F2") : null // Конвертація decimal -> string
+                );
+
+                entity.Property(e => e.WeightMeasure)
+                      .HasColumnType("decimal(10, 2)") // Вказуємо тип у базі даних
+                      .HasConversion(weightMeasureConverter); // Додаємо конвертер
+            });
+
+            modelBuilder.Entity<Restaurant>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("PK__Restaura__3214EC0721DA1F08");
+                entity.Property(e => e.Contacts).HasMaxLength(100);
+                entity.Property(e => e.Name).HasMaxLength(100);
+                entity.Property(e => e.Reviews).HasMaxLength(500);
+            });
+
+            OnModelCreatingPartial(modelBuilder);
+        }
+
+        partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+    }
+}
+

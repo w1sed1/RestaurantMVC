@@ -1,0 +1,66 @@
+﻿@model IEnumerable<RestaurantDomain.Models.Cook>
+
+@{
+    ViewData["Title"] = "Кухарі";
+}
+
+<h1>Кухарі</h1>
+
+<p>
+    <a asp-action="Create" class="btn btn-primary">Додати нового кухаря</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Surname)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.DateOfBirth)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Restaurant)
+            </th>
+            <th>
+                Страви
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Surname)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.DateOfBirth)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Restaurant.Name)
+                </td>
+                <td>
+                    @if (item.Dishes.Any())
+                    {
+                        <ul>
+                            @foreach (var dish in item.Dishes)
+                            {
+                                <li>@dish.Name</li> <!-- Замінюємо Price і Receipt на Name -->
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span>Немає призначених страв</span>
+                    }
+                </td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
+                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

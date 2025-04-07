@@ -1,0 +1,115 @@
+html {
+    font-size: 14px;
+    position: relative;
+    min-height: 100%;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+body {
+    margin-bottom: 60px;
+    background-color: #f5f1e9; /* Світлий фон для сторінки */
+    color: #5c4b3f; /* Темний колір тексту - гармонійний контраст */
+    font-family: 'Arial', sans-serif;
+}
+
+/* Стилі для кнопок */
+.btn-primary {
+    background-color: #d4c2a6; /* Теплий відтінок для кнопок */
+    border-color: #d4c2a6;
+    color: #5c4b3f;
+}
+
+    .btn-primary:hover {
+        background-color: #c0a88b; /* Темніший відтінок при наведенні */
+        border-color: #c0a88b;
+    }
+
+/* Стилі для навігаційної панелі */
+.navbar {
+    background-color: #e8d9c2; /* Світлий фон для навігації */
+}
+
+.navbar-brand, .nav-link {
+    color: #5c4b3f !important; /* Темний колір тексту для навігації */
+}
+
+    .nav-link:hover {
+        color: #a68a64 !important; /* Колір при наведенні */
+    }
+
+/* Стилі для таблиць */
+.table {
+    background-color: #fffcf7; /* Світлий фон для таблиць */
+    border: 1px solid #e8d9c2;
+}
+
+    .table th, .table td {
+        border: 1px solid #e8d9c2;
+    }
+
+    .table th {
+        background-color: #d4c2a6; /* Фон для заголовків таблиці */
+        color: #5c4b3f;
+    }
+
+/* Стилі для карток (наприклад, для відображення страв) */
+.card {
+    background-color: #fffcf7;
+    border: 1px solid #e8d9c2;
+    border-radius: 10px;
+    transition: transform 0.2s;
+}
+
+    .card:hover {
+        transform: scale(1.05);
+    }
+
+.card-title {
+    color: #5c4b3f;
+}
+
+.card-text {
+    color: #7a6b5d;
+}
+
+/* Стилі для футера */
+.footer {
+    background-color: #e8d9c2;
+    color: #5c4b3f;
+}
+
+/* Стилі для посилань */
+a {
+    color: #a68a64;
+}
+
+    a:hover {
+        color: #7a6b5d;
+    }
+
+.form-control {
+    border: 1px solid #e8d9c2;
+    background-color: #fffcf7;
+}
+
+    .form-control:focus {
+        border-color: #d4c2a6;
+        box-shadow: 0 0 0 0.2rem rgba(212, 194, 166, 0.25);
+    }
+
+/* Стилі для placeholder */
+.form-floating > .form-control-plaintext::placeholder,
+.form-floating > .form-control::placeholder {
+    color: var(--bs-secondary-color);
+    text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder,
+.form-floating > .form-control:focus::placeholder {
+    text-align: start;
+}
