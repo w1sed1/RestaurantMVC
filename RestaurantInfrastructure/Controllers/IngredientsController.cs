@@ -66,6 +66,13 @@ namespace RestaurantInfrastructure.Controllers
         public async Task<IActionResult> Create([Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
         {
             ModelState.Remove("Name");
+
+            // Перевірка унікальності назви
+            if (await _context.Ingredients.AnyAsync(i => i.Name == ingredient.Name))
+            {
+                ModelState.AddModelError("Name", "Інгредієнт з такою назвою вже існує.");
+            }
+
             if (ModelState.IsValid)
             {
                 _context.Add(ingredient);
@@ -74,7 +81,6 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(ingredient);
         }
-
         // GET: Ingredients/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
@@ -100,7 +106,15 @@ namespace RestaurantInfrastructure.Controllers
             {
                 return NotFound();
             }
+
             ModelState.Remove("Name");
+
+            // Перевірка унікальності назви (виключаємо поточний інгредієнт)
+            if (await _context.Ingredients.AnyAsync(i => i.Name == ingredient.Name && i.Id != ingredient.Id))
+            {
+                ModelState.AddModelError("Name", "Інгредієнт з такою назвою вже існує.");
+            }
+
             if (ModelState.IsValid)
             {
                 try

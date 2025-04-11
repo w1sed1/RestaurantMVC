@@ -78,20 +78,30 @@ namespace RestaurantDomain.Models;
 
 public partial class Dish : Entity
 {
+    [Required(ErrorMessage = "Назва страви є обов'язковою.")]
+    [StringLength(100, MinimumLength = 2, ErrorMessage = "Назва страви повинна містити від 2 до 100 символів.")]
+    [RegularExpression(@"^(?=.*[a-zA-Zа-яА-Я]).+$", ErrorMessage = "Назва страви повинна містити хоча б одну букву.")]
     [Display(Name = "Назва")]
-    public string Name { get; set; } = null!; // Додаємо поле для назви страви
+    public string Name { get; set; } = null!;
 
-    [Display(Name = "Ціна")]
+    [Required(ErrorMessage = "Ціна є обов'язковою.")]
+    [Range(0.01, 10000, ErrorMessage = "Ціна повинна бути в межах від 0.01 грн до 10000 грн.")]
+    [Display(Name = "Ціна(грн)")]
     public decimal Price { get; set; }
 
+    [Required(ErrorMessage = "Рецепт є обов'язковим.")]
+    [StringLength(500, MinimumLength = 10, ErrorMessage = "Рецепт повинен містити від 10 до 500 символів.")]
     [Display(Name = "Рецепт")]
     public string? Receipt { get; set; }
 
+    [Required(ErrorMessage = "Калорійність є обов'язковою.")]
+    [Range(0, 10000, ErrorMessage = "Калорійність повинна бути в межах від 0 ккал до 10000 ккал.")]
     [Display(Name = "Калорії")]
     public int? Calories { get; set; }
 
     public int CategoryId { get; set; }
 
+    [Required(ErrorMessage = "Категорія є обов'язковою.")]
     [Display(Name = "Категорія")]
     public virtual Category Category { get; set; } = null!;
 
@@ -125,12 +135,18 @@ namespace RestaurantDomain.Models;
 
 public partial class Ingredient : Entity
 {
+    [Required(ErrorMessage = "Назва інгредієнта є обов'язковою.")]
+    [StringLength(100, MinimumLength = 2, ErrorMessage = "Назва інгредієнта повинна містити від 2 до 100 символів.")]
+    [RegularExpression(@"^(?=.*[a-zA-Zа-яА-Я]).+$", ErrorMessage = "Назва інгредієнта повинна містити хоча б одну букву.")]
     [Display(Name = "Назва")]
     public string Name { get; set; } = null!;
 
-    [Display(Name = "Вага/об'єм")]
+    [Range(0, 10000, ErrorMessage = "Вага повинна бути в межах від 0 до 10000.")]
+    [Display(Name = "Вага(гр)/об'єм(мл)")]
     public string? WeightMeasure { get; set; }
 
+    [Required(ErrorMessage = "Калорійність є обов'язковою.")]
+    [Range(0, 10000, ErrorMessage = "Калорійність повинна бути в межах від 0 до 10000.")]
     [Display(Name = "Калорії")]
     public int? Calories { get; set; }
 
@@ -183,33 +199,25 @@ using RestaurantInfrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// ������ ���������� �� �������������
 builder.Services.AddControllersWithViews();
 
-// �������� RestaurantDbContext
+// �������� RestaurantDbContext � ��������� �����������
 builder.Services.AddDbContext<RestaurantDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Home/Error");
-    app.UseHsts();
-}
-
 app.UseHttpsRedirection();
+app.UseStaticFiles();
+
 app.UseRouting();
 
 app.UseAuthorization();
 
-app.MapStaticAssets();
-
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
+    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.Run();
 
@@ -652,14 +660,19 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Dishes/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish)
         {
             ModelState.Remove("Name");
             ModelState.Remove("Category");
+
+            // Перевірка унікальності назви
+            if (await _context.Dishes.AnyAsync(d => d.Name == dish.Name))
+            {
+                ModelState.AddModelError("Name", "Страва з такою назвою вже існує.");
+            }
+
             if (ModelState.IsValid)
             {
                 _context.Add(dish);
@@ -669,7 +682,6 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
             return View(dish);
         }
-
         // GET: Dishes/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
@@ -678,33 +690,81 @@ namespace RestaurantInfrastructure.Controllers
                 return NotFound();
             }
 
-            var dish = await _context.Dishes.FindAsync(id);
+            var dish = await _context.Dishes
+                .Include(d => d.Ingredients) // Завантажуємо поточні інгредієнти
+                .Include(d => d.Category)
+                .FirstOrDefaultAsync(d => d.Id == id);
+
             if (dish == null)
             {
                 return NotFound();
             }
+
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
+            // Передаємо список усіх інгредієнтів для вибору
+            ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", dish.Ingredients.Select(i => i.Id));
             return View(dish);
         }
 
         // POST: Dishes/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish)
+        public async Task<IActionResult> Edit(int id, [Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish, int[] selectedIngredients)
         {
             if (id != dish.Id)
             {
                 return NotFound();
             }
+
             ModelState.Remove("Name");
             ModelState.Remove("Category");
+
+            // Перевірка унікальності назви (виключаємо поточну страву)
+            if (await _context.Dishes.AnyAsync(d => d.Name == dish.Name && d.Id != dish.Id))
+            {
+                ModelState.AddModelError("Name", "Страва з такою назвою вже існує.");
+            }
+
+            // Перевірка, чи вибрано хоча б один інгредієнт
+            if (selectedIngredients == null || !selectedIngredients.Any())
+            {
+                ModelState.AddModelError("selectedIngredients", "Будь ласка, виберіть хоча б один інгредієнт для страви.");
+            }
+
             if (ModelState.IsValid)
             {
                 try
                 {
-                    _context.Update(dish);
+                    var dishToUpdate = await _context.Dishes
+                        .Include(d => d.Ingredients)
+                        .FirstOrDefaultAsync(d => d.Id == id);
+
+                    if (dishToUpdate == null)
+                    {
+                        return NotFound();
+                    }
+
+                    dishToUpdate.Name = dish.Name;
+                    dishToUpdate.Price = dish.Price;
+                    dishToUpdate.Receipt = dish.Receipt;
+                    dishToUpdate.Calories = dish.Calories;
+                    dishToUpdate.CategoryId = dish.CategoryId;
+
+                    dishToUpdate.Ingredients.Clear();
+                    if (selectedIngredients != null)
+                    {
+                        var ingredientsToAdd = await _context.Ingredients
+                            .Where(i => selectedIngredients.Contains(i.Id))
+                            .ToListAsync();
+                        foreach (var ingredient in ingredientsToAdd)
+                        {
+                            if (!dishToUpdate.Ingredients.Any(i => i.Id == ingredient.Id))
+                            {
+                                dishToUpdate.Ingredients.Add(ingredient);
+                            }
+                        }
+                    }
+
                     await _context.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
@@ -720,7 +780,9 @@ namespace RestaurantInfrastructure.Controllers
                 }
                 return RedirectToAction(nameof(Index));
             }
+
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
+            ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", selectedIngredients);
             return View(dish);
         }
 
@@ -859,7 +921,13 @@ namespace RestaurantInfrastructure.Controllers
             {
                 return Problem("Entity set 'RestaurantDbContext.Ingredients' is null.");
             }
-            return View(await _context.Ingredients.ToListAsync());
+
+            // Завантажуємо інгредієнти разом із пов’язаними стравами
+            var ingredients = await _context.Ingredients
+                .Include(i => i.Dishes) // Додаємо Include для завантаження страв
+                .ToListAsync();
+
+            return View(ingredients);
         }
 
         // GET: Ingredients/Details/5
@@ -871,6 +939,7 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
+                .Include(i => i.Dishes) // Завантажуємо страви для деталей
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (ingredient == null)
             {
@@ -887,13 +956,18 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Ingredients/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
         {
             ModelState.Remove("Name");
+
+            // Перевірка унікальності назви
+            if (await _context.Ingredients.AnyAsync(i => i.Name == ingredient.Name))
+            {
+                ModelState.AddModelError("Name", "Інгредієнт з такою назвою вже існує.");
+            }
+
             if (ModelState.IsValid)
             {
                 _context.Add(ingredient);
@@ -902,7 +976,6 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(ingredient);
         }
-
         // GET: Ingredients/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
@@ -920,8 +993,6 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Ingredients/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
@@ -930,7 +1001,15 @@ namespace RestaurantInfrastructure.Controllers
             {
                 return NotFound();
             }
+
             ModelState.Remove("Name");
+
+            // Перевірка унікальності назви (виключаємо поточний інгредієнт)
+            if (await _context.Ingredients.AnyAsync(i => i.Name == ingredient.Name && i.Id != ingredient.Id))
+            {
+                ModelState.AddModelError("Name", "Інгредієнт з такою назвою вже існує.");
+            }
+
             if (ModelState.IsValid)
             {
                 try
@@ -953,6 +1032,7 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(ingredient);
         }
+
         // GET: Ingredients/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
@@ -962,6 +1042,7 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
+                .Include(i => i.Dishes) // Завантажуємо страви для видалення
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (ingredient == null)
             {
@@ -1604,25 +1685,25 @@ namespace RestaurantInfrastructure.Models
 @model RestaurantDomain.Models.Dish
 
 @{
-    ViewData["Title"] = "Додати страву";
+    ViewData["Title"] = "Створити страву";
 }
 
-<h1>Додати</h1>
+<h1>Створити</h1>
 
 <h4>Страва</h4>
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Create">
+        <form asp-action="Create" novalidate>
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="form-group">
                 <label asp-for="Name" class="control-label"></label>
-                <input asp-for="Name" class="form-control" />
+                <input asp-for="Name" class="form-control" data-val-regex="Назва страви повинна містити хоча б одну букву." data-val-regex-pattern="^(?=.*[a-zA-Zа-яА-Я]).+$" />
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Price" class="control-label"></label>
-                <input asp-for="Price" class="form-control" />
+                <input asp-for="Price" class="form-control" type="number" step="0.01" data-val-number="Ціна повинна бути числом." data-val-range="Ціна повинна бути в межах від 0.01 до 10000." data-val-range-min="0.01" data-val-range-max="10000" />
                 <span asp-validation-for="Price" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -1632,15 +1713,16 @@ namespace RestaurantInfrastructure.Models
             </div>
             <div class="form-group">
                 <label asp-for="Calories" class="control-label"></label>
-                <input asp-for="Calories" class="form-control" />
+                <input asp-for="Calories" class="form-control" type="number" data-val-number="Калорійність повинна бути числом." data-val-range="Калорійність повинна бути в межах від 1 до 10000." data-val-range-min="1" data-val-range-max="10000" />
                 <span asp-validation-for="Calories" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="CategoryId" class="control-label"></label>
                 <select asp-for="CategoryId" class="form-control" asp-items="ViewBag.CategoryId"></select>
+                <span asp-validation-for="CategoryId" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <input type="submit" value="Додати" class="btn btn-primary" />
+                <input type="submit" value="Створити" class="btn btn-primary" />
             </div>
         </form>
     </div>
@@ -1655,7 +1737,6 @@ namespace RestaurantInfrastructure.Models
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
 }
-
 
 // ==== Views\Dishes\Delete.cshtml ====
 @model RestaurantDomain.Models.Dish
@@ -1774,16 +1855,17 @@ namespace RestaurantInfrastructure.Models
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Edit">
+        <form asp-action="Edit" novalidate>
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <label asp-for="Name" class="control-label"></label>
-                <input asp-for="Name" class="form-control" />
+                <input asp-for="Name" class="form-control" data-val-regex="Назва страви повинна містити хоча б одну букву." data-val-regex-pattern="^(?=.*[a-zA-Zа-яА-Я]).+$" />
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Price" class="control-label"></label>
-                <input asp-for="Price" class="form-control" />
+                <input asp-for="Price" class="form-control" type="number" step="0.01" data-val-number="Ціна повинна бути числом." data-val-range="Ціна повинна бути в межах від 0.01 до 10000." data-val-range-min="0.01" data-val-range-max="10000" />
                 <span asp-validation-for="Price" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -1793,7 +1875,7 @@ namespace RestaurantInfrastructure.Models
             </div>
             <div class="form-group">
                 <label asp-for="Calories" class="control-label"></label>
-                <input asp-for="Calories" class="form-control" />
+                <input asp-for="Calories" class="form-control" type="number" data-val-number="Калорійність повинна бути числом." data-val-range="Калорійність повинна бути в межах від 1 до 10000." data-val-range-min="1" data-val-range-max="10000" />
                 <span asp-validation-for="Calories" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -1801,7 +1883,14 @@ namespace RestaurantInfrastructure.Models
                 <select asp-for="CategoryId" class="form-control" asp-items="ViewBag.CategoryId"></select>
                 <span asp-validation-for="CategoryId" class="text-danger"></span>
             </div>
-            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <label class="control-label">Інгредієнти</label>
+                <select name="selectedIngredients" multiple class="form-control" asp-items="ViewBag.Ingredients"></select>
+                @if (ViewData.ModelState.ContainsKey("selectedIngredients") && ViewData.ModelState["selectedIngredients"].Errors.Any())
+                {
+                    <span class="text-danger">@ViewData.ModelState["selectedIngredients"].Errors.First().ErrorMessage</span>
+                }
+            </div>
             <div class="form-group">
                 <input type="submit" value="Зберегти" class="btn btn-primary" />
             </div>
@@ -2041,34 +2130,34 @@ namespace RestaurantInfrastructure.Models
 @model RestaurantDomain.Models.Ingredient
 
 @{
-    ViewData["Title"] = "Додати інгредієнт";
+    ViewData["Title"] = "Створити інгредієнт";
 }
 
-<h1>Додати</h1>
+<h1>Створити</h1>
 
 <h4>Інгредієнт</h4>
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Create">
+        <form asp-action="Create" novalidate>
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="form-group">
                 <label asp-for="Name" class="control-label"></label>
-                <input asp-for="Name" class="form-control" />
+                <input asp-for="Name" class="form-control" data-val-regex="Назва інгредієнта повинна містити хоча б одну букву." data-val-regex-pattern="^(?=.*[a-zA-Zа-яА-Я]).+$" />
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="WeightMeasure" class="control-label"></label>
-                <input asp-for="WeightMeasure" class="form-control" />
+                <input asp-for="WeightMeasure" class="form-control" type="number" step="0.01" data-val-number="Вага повинна бути числом." data-val-range="Вага повинна бути в межах від 0.01 до 10000." data-val-range-min="0.01" data-val-range-max="10000" />
                 <span asp-validation-for="WeightMeasure" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Calories" class="control-label"></label>
-                <input asp-for="Calories" class="form-control" />
+                <input asp-for="Calories" class="form-control" type="number" data-val-number="Калорійність повинна бути числом." data-val-range="Калорійність повинна бути в межах від 1 до 10000." data-val-range-min="1" data-val-range-max="10000" />
                 <span asp-validation-for="Calories" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <input type="submit" value="Додати" class="btn btn-primary" />
+                <input type="submit" value="Створити" class="btn btn-primary" />
             </div>
         </form>
     </div>
@@ -2116,6 +2205,24 @@ namespace RestaurantInfrastructure.Models
         <dd class="col-sm-10">
             @Html.DisplayFor(model => model.Calories)
         </dd>
+        <dt class="col-sm-2">
+            Страви
+        </dt>
+        <dd class="col-sm-10">
+            @if (Model.Dishes.Any())
+            {
+                <ul>
+                    @foreach (var dish in Model.Dishes.OrderBy(d => d.Name))
+                    {
+                        <li>@dish.Name</li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <span>Немає призначених страв</span>
+            }
+        </dd>
     </dl>
 
     <form asp-action="Delete">
@@ -2124,7 +2231,6 @@ namespace RestaurantInfrastructure.Models
         <a asp-action="Index">Повернутися до списку</a>
     </form>
 </div>
-
 
 // ==== Views\Ingredients\Details.cshtml ====
 @model RestaurantDomain.Models.Ingredient
@@ -2157,13 +2263,30 @@ namespace RestaurantInfrastructure.Models
         <dd class="col-sm-10">
             @Html.DisplayFor(model => model.Calories)
         </dd>
+        <dt class="col-sm-2">
+            Страви
+        </dt>
+        <dd class="col-sm-10">
+            @if (Model.Dishes.Any())
+            {
+                <ul>
+                    @foreach (var dish in Model.Dishes.OrderBy(d => d.Name))
+                    {
+                        <li><a asp-controller="Dishes" asp-action="Details" asp-route-id="@dish.Id">@dish.Name</a></li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <span>Немає призначених страв</span>
+            }
+        </dd>
     </dl>
 </div>
 <div>
     <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
     <a asp-action="Index">Повернутися до списку</a>
 </div>
-
 
 // ==== Views\Ingredients\Edit.cshtml ====
 @model RestaurantDomain.Models.Ingredient
@@ -2178,22 +2301,22 @@ namespace RestaurantInfrastructure.Models
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Edit">
+        <form asp-action="Edit" novalidate>
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <label asp-for="Name" class="control-label"></label>
-                <input asp-for="Name" class="form-control" />
+                <input asp-for="Name" class="form-control" data-val-regex="Назва інгредієнта повинна містити хоча б одну букву." data-val-regex-pattern="^(?=.*[a-zA-Zа-яА-Я]).+$" />
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="WeightMeasure" class="control-label"></label>
-                <input asp-for="WeightMeasure" class="form-control" />
+                <input asp-for="WeightMeasure" class="form-control" type="number" step="0.01" data-val-number="Вага повинна бути числом." data-val-range="Вага повинна бути в межах від 0.01 до 10000." data-val-range-min="0.01" data-val-range-max="10000" />
                 <span asp-validation-for="WeightMeasure" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Calories" class="control-label"></label>
-                <input asp-for="Calories" class="form-control" />
+                <input asp-for="Calories" class="form-control" type="number" data-val-number="Калорійність повинна бути числом." data-val-range="Калорійність повинна бути в межах від 1 до 10000." data-val-range-min="1" data-val-range-max="10000" />
                 <span asp-validation-for="Calories" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -2212,7 +2335,6 @@ namespace RestaurantInfrastructure.Models
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
 }
-
 
 // ==== Views\Ingredients\Index.cshtml ====
 @model IEnumerable<RestaurantDomain.Models.Ingredient>
@@ -2261,9 +2383,9 @@ namespace RestaurantInfrastructure.Models
                     @if (item.Dishes.Any())
                     {
                         <ul>
-                            @foreach (var dish in item.Dishes)
+                            @foreach (var dish in item.Dishes.OrderBy(d => d.Name))
                             {
-                                <li>@dish.Name</li>
+                                <li><a asp-controller="Dishes" asp-action="Details" asp-route-id="@dish.Id">@dish.Name</a></li>
                             }
                         </ul>
                     }

@@ -67,6 +67,13 @@ namespace RestaurantInfrastructure.Controllers
         {
             ModelState.Remove("Name");
             ModelState.Remove("Category");
+
+            // Перевірка унікальності назви
+            if (await _context.Dishes.AnyAsync(d => d.Name == dish.Name))
+            {
+                ModelState.AddModelError("Name", "Страва з такою назвою вже існує.");
+            }
+
             if (ModelState.IsValid)
             {
                 _context.Add(dish);
@@ -76,7 +83,6 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
             return View(dish);
         }
-
         // GET: Dishes/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
@@ -114,11 +120,22 @@ namespace RestaurantInfrastructure.Controllers
             ModelState.Remove("Name");
             ModelState.Remove("Category");
 
+            // Перевірка унікальності назви (виключаємо поточну страву)
+            if (await _context.Dishes.AnyAsync(d => d.Name == dish.Name && d.Id != dish.Id))
+            {
+                ModelState.AddModelError("Name", "Страва з такою назвою вже існує.");
+            }
+
+            // Перевірка, чи вибрано хоча б один інгредієнт
+            if (selectedIngredients == null || !selectedIngredients.Any())
+            {
+                ModelState.AddModelError("selectedIngredients", "Будь ласка, виберіть хоча б один інгредієнт для страви.");
+            }
+
             if (ModelState.IsValid)
             {
                 try
                 {
-                    // Завантажуємо страву з бази разом із її інгредієнтами
                     var dishToUpdate = await _context.Dishes
                         .Include(d => d.Ingredients)
                         .FirstOrDefaultAsync(d => d.Id == id);
@@ -128,18 +145,13 @@ namespace RestaurantInfrastructure.Controllers
                         return NotFound();
                     }
 
-                    // Оновлюємо основні поля страви
                     dishToUpdate.Name = dish.Name;
                     dishToUpdate.Price = dish.Price;
                     dishToUpdate.Receipt = dish.Receipt;
                     dishToUpdate.Calories = dish.Calories;
                     dishToUpdate.CategoryId = dish.CategoryId;
 
-                    // Оновлюємо список інгредієнтів
-                    // Спочатку очищаємо поточні інгредієнти
                     dishToUpdate.Ingredients.Clear();
-
-                    // Додаємо нові інгредієнти, які вибрав користувач
                     if (selectedIngredients != null)
                     {
                         var ingredientsToAdd = await _context.Ingredients
@@ -147,7 +159,10 @@ namespace RestaurantInfrastructure.Controllers
                             .ToListAsync();
                         foreach (var ingredient in ingredientsToAdd)
                         {
-                            dishToUpdate.Ingredients.Add(ingredient);
+                            if (!dishToUpdate.Ingredients.Any(i => i.Id == ingredient.Id))
+                            {
+                                dishToUpdate.Ingredients.Add(ingredient);
+                            }
                         }
                     }
 

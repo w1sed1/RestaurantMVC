@@ -55,14 +55,10 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Cooks/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
         {
-            ModelState.Remove("Surname");
-            ModelState.Remove("Restaurant");
             if (ModelState.IsValid)
             {
                 _context.Add(cook);
@@ -72,7 +68,6 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
             return View(cook);
         }
-
         // GET: Cooks/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
@@ -101,8 +96,6 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Cooks/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("Id,Surname,DateOfBirth,RestaurantId")] Cook cook, int[] selectedDishes)
@@ -111,13 +104,11 @@ namespace RestaurantInfrastructure.Controllers
             {
                 return NotFound();
             }
-            ModelState.Remove("Surname");
-            ModelState.Remove("Restaurant");
+
             if (ModelState.IsValid)
             {
                 try
                 {
-                    // Завантажуємо існуючого кухаря з бази разом із його стравами
                     var cookToUpdate = await _context.Cooks
                         .Include(c => c.Dishes)
                         .FirstOrDefaultAsync(c => c.Id == id);
@@ -127,16 +118,11 @@ namespace RestaurantInfrastructure.Controllers
                         return NotFound();
                     }
 
-                    // Оновлюємо основні поля кухаря
                     cookToUpdate.Surname = cook.Surname;
                     cookToUpdate.DateOfBirth = cook.DateOfBirth;
                     cookToUpdate.RestaurantId = cook.RestaurantId;
 
-                    // Оновлюємо список страв
-                    // Спочатку очищаємо поточні страви
                     cookToUpdate.Dishes.Clear();
-
-                    // Додаємо нові страви, які вибрав користувач
                     if (selectedDishes != null)
                     {
                         var dishesToAdd = await _context.Dishes
@@ -148,7 +134,6 @@ namespace RestaurantInfrastructure.Controllers
                         }
                     }
 
-                    // Зберігаємо зміни
                     await _context.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
@@ -165,7 +150,6 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Якщо модель невалідна, повертаємо форму з даними
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
             ViewData["Dishes"] = new MultiSelectList(_context.Dishes, "Id", "Name", selectedDishes);
             return View(cook);
