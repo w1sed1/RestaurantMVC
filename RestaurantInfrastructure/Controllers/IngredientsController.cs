@@ -26,7 +26,13 @@ namespace RestaurantInfrastructure.Controllers
             {
                 return Problem("Entity set 'RestaurantDbContext.Ingredients' is null.");
             }
-            return View(await _context.Ingredients.ToListAsync());
+
+            // Завантажуємо інгредієнти разом із пов’язаними стравами
+            var ingredients = await _context.Ingredients
+                .Include(i => i.Dishes) // Додаємо Include для завантаження страв
+                .ToListAsync();
+
+            return View(ingredients);
         }
 
         // GET: Ingredients/Details/5
@@ -38,6 +44,7 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
+                .Include(i => i.Dishes) // Завантажуємо страви для деталей
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (ingredient == null)
             {
@@ -54,8 +61,6 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Ingredients/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
@@ -87,8 +92,6 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Ingredients/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
@@ -120,6 +123,7 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(ingredient);
         }
+
         // GET: Ingredients/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
@@ -129,6 +133,7 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
+                .Include(i => i.Dishes) // Завантажуємо страви для видалення
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (ingredient == null)
             {

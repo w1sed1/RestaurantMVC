@@ -44,9 +44,9 @@
                     @if (item.Dishes.Any())
                     {
                         <ul>
-                            @foreach (var dish in item.Dishes)
+                            @foreach (var dish in item.Dishes.OrderBy(d => d.Name))
                             {
-                                <li>@dish.Name</li>
+                                <li><a asp-controller="Dishes" asp-action="Details" asp-route-id="@dish.Id">@dish.Name</a></li>
                             }
                         </ul>
                     }

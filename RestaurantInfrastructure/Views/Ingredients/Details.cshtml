@@ -28,6 +28,24 @@
         <dd class="col-sm-10">
             @Html.DisplayFor(model => model.Calories)
         </dd>
+        <dt class="col-sm-2">
+            Страви
+        </dt>
+        <dd class="col-sm-10">
+            @if (Model.Dishes.Any())
+            {
+                <ul>
+                    @foreach (var dish in Model.Dishes.OrderBy(d => d.Name))
+                    {
+                        <li><a asp-controller="Dishes" asp-action="Details" asp-route-id="@dish.Id">@dish.Name</a></li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <span>Немає призначених страв</span>
+            }
+        </dd>
     </dl>
 </div>
 <div>

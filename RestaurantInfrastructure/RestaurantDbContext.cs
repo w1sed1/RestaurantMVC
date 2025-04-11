@@ -17,6 +17,7 @@ namespace RestaurantInfrastructure
         public virtual DbSet<Ingredient> Ingredients { get; set; }
         public virtual DbSet<Restaurant> Restaurants { get; set; }
 
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Category>(entity =>

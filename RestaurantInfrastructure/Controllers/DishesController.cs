@@ -61,8 +61,6 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Dishes/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish)
@@ -87,33 +85,72 @@ namespace RestaurantInfrastructure.Controllers
                 return NotFound();
             }
 
-            var dish = await _context.Dishes.FindAsync(id);
+            var dish = await _context.Dishes
+                .Include(d => d.Ingredients) // Завантажуємо поточні інгредієнти
+                .Include(d => d.Category)
+                .FirstOrDefaultAsync(d => d.Id == id);
+
             if (dish == null)
             {
                 return NotFound();
             }
+
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
+            // Передаємо список усіх інгредієнтів для вибору
+            ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", dish.Ingredients.Select(i => i.Id));
             return View(dish);
         }
 
         // POST: Dishes/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish)
+        public async Task<IActionResult> Edit(int id, [Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish, int[] selectedIngredients)
         {
             if (id != dish.Id)
             {
                 return NotFound();
             }
+
             ModelState.Remove("Name");
             ModelState.Remove("Category");
+
             if (ModelState.IsValid)
             {
                 try
                 {
-                    _context.Update(dish);
+                    // Завантажуємо страву з бази разом із її інгредієнтами
+                    var dishToUpdate = await _context.Dishes
+                        .Include(d => d.Ingredients)
+                        .FirstOrDefaultAsync(d => d.Id == id);
+
+                    if (dishToUpdate == null)
+                    {
+                        return NotFound();
+                    }
+
+                    // Оновлюємо основні поля страви
+                    dishToUpdate.Name = dish.Name;
+                    dishToUpdate.Price = dish.Price;
+                    dishToUpdate.Receipt = dish.Receipt;
+                    dishToUpdate.Calories = dish.Calories;
+                    dishToUpdate.CategoryId = dish.CategoryId;
+
+                    // Оновлюємо список інгредієнтів
+                    // Спочатку очищаємо поточні інгредієнти
+                    dishToUpdate.Ingredients.Clear();
+
+                    // Додаємо нові інгредієнти, які вибрав користувач
+                    if (selectedIngredients != null)
+                    {
+                        var ingredientsToAdd = await _context.Ingredients
+                            .Where(i => selectedIngredients.Contains(i.Id))
+                            .ToListAsync();
+                        foreach (var ingredient in ingredientsToAdd)
+                        {
+                            dishToUpdate.Ingredients.Add(ingredient);
+                        }
+                    }
+
                     await _context.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
@@ -129,7 +166,9 @@ namespace RestaurantInfrastructure.Controllers
                 }
                 return RedirectToAction(nameof(Index));
             }
+
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
+            ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", selectedIngredients);
             return View(dish);
         }
 

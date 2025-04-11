@@ -186,7 +186,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-//          RestaurantDbContext
+// �������� RestaurantDbContext
 builder.Services.AddDbContext<RestaurantDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -766,38 +766,69 @@ namespace RestaurantInfrastructure.Controllers
 }
 
 // ==== Controllers\HomeController.cs ====
-using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using RestaurantInfrastructure;
 using RestaurantInfrastructure.Models;
+using System.Diagnostics;
+using System.Linq;
 
-namespace RestaurantInfrastructure.Controllers;
-
-public class HomeController : Controller
+namespace RestaurantInfrastructure.Controllers
 {
-    private readonly ILogger<HomeController> _logger;
-
-    public HomeController(ILogger<HomeController> logger)
+    public class HomeController : Controller
     {
-        _logger = logger;
-    }
+        private readonly ILogger<HomeController> _logger;
+        private readonly RestaurantDbContext _context;
 
-    public IActionResult Index()
-    {
-        return View();
-    }
+        public HomeController(ILogger<HomeController> logger, RestaurantDbContext context)
+        {
+            _logger = logger;
+            _context = context;
+        }
 
-    public IActionResult Privacy()
-    {
-        return View();
-    }
+        public IActionResult Index()
+        {
+            // ���� ��� ������� ������� (������� ����� �� ����������)
+            var dishCategories = _context.Dishes
+                .Include(d => d.Category)
+                .GroupBy(d => d.Category.Description)
+                .Select(g => new { Category = g.Key, Count = g.Count() })
+                .ToList();
 
-    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult Error()
-    {
-        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+            var pieChartLabels = dishCategories.Select(c => c.Category).ToArray();
+            var pieChartData = dishCategories.Select(c => c.Count).ToArray();
+
+            // ���� ��� ����������� ������� (������� ������ � ����������)
+            var cookRestaurants = _context.Cooks
+                .Include(c => c.Restaurant)
+                .GroupBy(c => c.Restaurant.Name)
+                .Select(g => new { Restaurant = g.Key, Count = g.Count() })
+                .ToList();
+
+            var barChartLabels = cookRestaurants.Select(r => r.Restaurant).ToArray();
+            var barChartData = cookRestaurants.Select(r => r.Count).ToArray();
+
+            // �������� ���� � ViewBag
+            ViewBag.PieChartLabels = pieChartLabels;
+            ViewBag.PieChartData = pieChartData;
+            ViewBag.BarChartLabels = barChartLabels;
+            ViewBag.BarChartData = barChartData;
+
+            return View();
+        }
+
+        public IActionResult Privacy()
+        {
+            return View();
+        }
+
+        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+        public IActionResult Error()
+        {
+            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+        }
     }
 }
-
 
 // ==== Controllers\IngredientsController.cs ====
 using System;
@@ -1908,22 +1939,28 @@ namespace RestaurantInfrastructure.Models
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        // Дані з ViewBag
+        const pieChartLabels = @Html.Raw(Json.Serialize(ViewBag.PieChartLabels));
+        const pieChartData = @Html.Raw(Json.Serialize(ViewBag.PieChartData));
+        const barChartLabels = @Html.Raw(Json.Serialize(ViewBag.BarChartLabels));
+        const barChartData = @Html.Raw(Json.Serialize(ViewBag.BarChartData));
+
         // Кругова діаграма
         const pieCtx = document.getElementById('pieChart').getContext('2d');
         const pieChart = new Chart(pieCtx, {
             type: 'pie',
             data: {
-                labels: ['Супи', 'Основні страви', 'Десерти', 'Напої'],
+                labels: pieChartLabels,
                 datasets: [{
                     label: 'Розподіл страв за категоріями',
-                    data: [25, 35, 20, 20], // Приклад даних у відсотках
+                    data: pieChartData,
                     backgroundColor: [
-                        '#ff5733', // Яскравий червоно-помаранчевий (супи)
-                        '#33d17a', // Соковитий зелений (основні страви)
-                        '#ffcc00', // Яскравий жовтий (десерти)
-                        '#1e90ff'  // Насичений синій (напої)
+                        '#ff5733', // Яскравий червоно-помаранчевий
+                        '#33d17a', // Соковитий зелений
+                        '#ffcc00', // Яскравий жовтий
+                        '#1e90ff'  // Насичений синій
                     ],
-                    borderColor: '#ffffff', // Білий контур для контрасту
+                    borderColor: '#ffffff',
                     borderWidth: 2
                 }]
             },
@@ -1941,21 +1978,21 @@ namespace RestaurantInfrastructure.Models
             }
         });
 
-        // Звичайна діаграма
+        // Стовпчикова діаграма
         const barCtx = document.getElementById('barChart').getContext('2d');
         const barChart = new Chart(barCtx, {
             type: 'bar',
             data: {
-                labels: ['Ресторан 1', 'Ресторан 2', 'Ресторан 3'],
+                labels: barChartLabels,
                 datasets: [{
                     label: 'Кількість кухарів',
-                    data: [5, 8, 3], // Приклад даних
+                    data: barChartData,
                     backgroundColor: [
                         '#ff2d55', // Яскравий рожево-червоний
                         '#00ccff', // Світло-блакитний
                         '#ffaa00'  // Помаранчевий
                     ],
-                    borderColor: '#ffffff', // Білий контур
+                    borderColor: '#ffffff',
                     borderWidth: 1
                 }]
             },
@@ -2645,39 +2682,39 @@ html {
 
 body {
     margin-bottom: 60px;
-    background-color: #f5f1e9; /*                        */
-    color: #5c4b3f; /*                    -                      */
+    background-color: #f5f1e9; /* ������ ��� ��� ������� */
+    color: #5c4b3f; /* ������ ���� ������ - ����������� �������� */
     font-family: 'Arial', sans-serif;
 }
 
-/*                 */
+/* ���� ��� ������ */
 .btn-primary {
-    background-color: #d4c2a6; /*                          */
+    background-color: #d4c2a6; /* ������ ������ ��� ������ */
     border-color: #d4c2a6;
     color: #5c4b3f;
 }
 
     .btn-primary:hover {
-        background-color: #c0a88b; /*                               */
+        background-color: #c0a88b; /* �������� ������ ��� ��������� */
         border-color: #c0a88b;
     }
 
-/*                           */
+/* ���� ��� ���������� ����� */
 .navbar {
-    background-color: #e8d9c2; /*                         */
+    background-color: #e8d9c2; /* ������ ��� ��� �������� */
 }
 
 .navbar-brand, .nav-link {
-    color: #5c4b3f !important; /*                                 */
+    color: #5c4b3f !important; /* ������ ���� ������ ��� �������� */
 }
 
     .nav-link:hover {
-        color: #a68a64 !important; /*                    */
+        color: #a68a64 !important; /* ���� ��� ��������� */
     }
 
-/*                  */
+/* ���� ��� ������� */
 .table {
-    background-color: #fffcf7; /*                        */
+    background-color: #fffcf7; /* ������ ��� ��� ������� */
     border: 1px solid #e8d9c2;
 }
 
@@ -2686,11 +2723,11 @@ body {
     }
 
     .table th {
-        background-color: #d4c2a6; /*                           */
+        background-color: #d4c2a6; /* ��� ��� ��������� ������� */
         color: #5c4b3f;
     }
 
-/*                 (         ,                      ) */
+/* ���� ��� ������ (���������, ��� ����������� �����) */
 .card {
     background-color: #fffcf7;
     border: 1px solid #e8d9c2;
@@ -2710,13 +2747,13 @@ body {
     color: #7a6b5d;
 }
 
-/*                 */
+/* ���� ��� ������ */
 .footer {
     background-color: #e8d9c2;
     color: #5c4b3f;
 }
 
-/*                   */
+/* ���� ��� �������� */
 a {
     color: #a68a64;
 }
@@ -2735,7 +2772,7 @@ a {
         box-shadow: 0 0 0 0.2rem rgba(212, 194, 166, 0.25);
     }
 
-/*          placeholder */
+/* ���� ��� placeholder */
 .form-floating > .form-control-plaintext::placeholder,
 .form-floating > .form-control::placeholder {
     color: var(--bs-secondary-color);
@@ -2753,126 +2790,5 @@ a {
 // for details on configuring this project to bundle and minify static web assets.
 
 // Write your JavaScript code.
-// ==== RestaurantDbContext.cs ====
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using RestaurantDomain.Models;
 
-namespace RestaurantInfrastructure
-{
-    public partial class RestaurantDbContext : DbContext
-    {
-        public RestaurantDbContext(DbContextOptions<RestaurantDbContext> options)
-            : base(options)
-        {
-        }
-
-        public virtual DbSet<Category> Categories { get; set; }
-        public virtual DbSet<Cook> Cooks { get; set; }
-        public virtual DbSet<Dish> Dishes { get; set; }
-        public virtual DbSet<Ingredient> Ingredients { get; set; }
-        public virtual DbSet<Restaurant> Restaurants { get; set; }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Category>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("PK__Categori__3214EC07DBFD7161");
-                entity.Property(e => e.Description).HasMaxLength(100);
-            });
-
-            modelBuilder.Entity<Cook>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("PK__Cooks__3214EC075F8F54F4");
-                entity.Property(e => e.Surname).HasMaxLength(50);
-
-                entity.HasOne(d => d.Restaurant)
-                    .WithMany(p => p.Cooks)
-                    .HasForeignKey(d => d.RestaurantId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Cooks__Restauran__3B75D760");
-
-                entity.HasMany(d => d.Dishes)
-                    .WithMany(p => p.Cooks)
-                    .UsingEntity<Dictionary<string, object>>(
-                        "CookDishes",
-                        r => r.HasOne<Dish>()
-                            .WithMany()
-                            .HasForeignKey("DishId")
-                            .OnDelete(DeleteBehavior.ClientSetNull)
-                            .HasConstraintName("FK__CookDishe__DishI__440B1D61"),
-                        l => l.HasOne<Cook>()
-                            .WithMany()
-                            .HasForeignKey("CookId")
-                            .OnDelete(DeleteBehavior.ClientSetNull)
-                            .HasConstraintName("FK__CookDishe__CookI__4316F928"),
-                        j =>
-                        {
-                            j.HasKey("CookId", "DishId").HasName("PK__CookDish__F4903394A5BC686B");
-                        });
-            });
-
-            modelBuilder.Entity<Dish>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("PK__Dishes__3214EC07E6E03191");
-                entity.Property(e => e.Name).HasMaxLength(100);
-                entity.Property(e => e.Price).HasColumnType("decimal(10, 2)");
-                entity.Property(e => e.Receipt).HasMaxLength(500);
-
-                entity.HasOne(d => d.Category)
-                    .WithMany(p => p.Dishes)
-                    .HasForeignKey(d => d.CategoryId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Dishes__Category__3E52440B");
-
-                entity.HasMany(d => d.Ingredients)
-                    .WithMany(p => p.Dishes)
-                    .UsingEntity<Dictionary<string, object>>(
-                        "DishIngredients",
-                        r => r.HasOne<Ingredient>()
-                            .WithMany()
-                            .HasForeignKey("IngredientId")
-                            .OnDelete(DeleteBehavior.ClientSetNull)
-                            .HasConstraintName("FK__DishIngre__Ingre__47DBAE45"),
-                        l => l.HasOne<Dish>()
-                            .WithMany()
-                            .HasForeignKey("DishId")
-                            .OnDelete(DeleteBehavior.ClientSetNull)
-                            .HasConstraintName("FK__DishIngre__DishI__46E78A0C"),
-                        j =>
-                        {
-                            j.HasKey("DishId", "IngredientId").HasName("PK__DishIngr__A369A4752A665EE3");
-                        });
-            });
-
-            modelBuilder.Entity<Ingredient>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("PK__Ingredie__3214EC07DD41F209");
-                entity.Property(e => e.Name).HasMaxLength(100);
-
-                // Налаштування конвертації для WeightMeasure
-                var weightMeasureConverter = new ValueConverter<string?, decimal?>(
-                    v => v == null ? null : decimal.Parse(v), // Конвертація string -> decimal
-                    v => v.HasValue ? v.Value.ToString("F2") : null // Конвертація decimal -> string
-                );
-
-                entity.Property(e => e.WeightMeasure)
-                      .HasColumnType("decimal(10, 2)") // Вказуємо тип у базі даних
-                      .HasConversion(weightMeasureConverter); // Додаємо конвертер
-            });
-
-            modelBuilder.Entity<Restaurant>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("PK__Restaura__3214EC0721DA1F08");
-                entity.Property(e => e.Contacts).HasMaxLength(100);
-                entity.Property(e => e.Name).HasMaxLength(100);
-                entity.Property(e => e.Reviews).HasMaxLength(500);
-            });
-
-            OnModelCreatingPartial(modelBuilder);
-        }
-
-        partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
-    }
-}
 
