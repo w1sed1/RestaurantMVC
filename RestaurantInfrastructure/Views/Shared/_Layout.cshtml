@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿<!-- Views/Shared/_Layout.cshtml -->
+<!DOCTYPE html>
 <html lang="uk">
 <head>
     <meta charset="utf-8" />
@@ -39,6 +40,9 @@
                             <a class="nav-link text-dark" asp-area="" asp-controller="Ingredients" asp-action="Index">Інгредієнти</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Reports" asp-action="Index">Звіти</a> <!-- Додаємо посилання на Звіти -->
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Конфіденційність</a>
                         </li>
                     </ul>
@@ -63,4 +67,3 @@
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
-

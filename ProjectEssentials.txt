@@ -220,22 +220,53 @@ public partial class Restaurant : Entity
 }
 
 // ==== Program.cs ====
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using RestaurantInfrastructure;
+using System.Globalization;  // ������ ��� CultureInfo
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ������ ���������� �� �������������
-builder.Services.AddControllersWithViews();
+// ������ ������ �� ����������.
+builder.Services.AddControllersWithViews()
+    .AddViewLocalization();  // ������ �������� ���������� ��� ������������
 
-// �������� RestaurantDbContext � ��������� �����������
+// ������������ ����������
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    var supportedCultures = new[]
+    {
+        new CultureInfo("uk-UA"),  // ��������� ��������
+        new CultureInfo("en-US")   // ��������� �������� (�� �������)
+    };
+
+    options.DefaultRequestCulture = new Microsoft.AspNetCore.Localization.RequestCulture("uk-UA");
+    options.SupportedCultures = supportedCultures;
+    options.SupportedUICultures = supportedCultures;
+});
+
+// ������������ ��������� ���� �����
 builder.Services.AddDbContext<RestaurantDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
 
+// ������������ ������� ������� ������
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+}
+
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// ������ middleware ��� ����������
+app.UseRequestLocalization();
 
 app.UseRouting();
 
@@ -710,52 +741,47 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var dish = await _context.Dishes
-                .Include(d => d.Ingredients) // Завантажуємо поточні інгредієнти
                 .Include(d => d.Category)
-                .FirstOrDefaultAsync(d => d.Id == id);
+                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
+                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
+                .FirstOrDefaultAsync(m => m.Id == id);
 
             if (dish == null)
             {
                 return NotFound();
             }
 
+            // Передаємо список категорій для вибору
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
-            // Передаємо список усіх інгредієнтів для вибору
+
+            // Передаємо список інгредієнтів для вибору (MultiSelectList)
             ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", dish.Ingredients.Select(i => i.Id));
+
+            // Передаємо список кухарів для вибору (MultiSelectList)
+            ViewData["Cooks"] = new MultiSelectList(_context.Cooks, "Id", "Surname", dish.Cooks.Select(c => c.Id));
+
             return View(dish);
         }
-
+        // POST: Dishes/Edit/5
         // POST: Dishes/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish, int[] selectedIngredients)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,Price,Receipt,Calories,CategoryId")] Dish dish, int[] selectedIngredients, int[] selectedCooks)
         {
             if (id != dish.Id)
             {
                 return NotFound();
             }
-
             ModelState.Remove("Name");
             ModelState.Remove("Category");
-
-            // Перевірка унікальності назви (виключаємо поточну страву)
-            if (await _context.Dishes.AnyAsync(d => d.Name == dish.Name && d.Id != dish.Id))
-            {
-                ModelState.AddModelError("Name", "Страва з такою назвою вже існує.");
-            }
-
-            // Перевірка, чи вибрано хоча б один інгредієнт
-            if (selectedIngredients == null || !selectedIngredients.Any())
-            {
-                ModelState.AddModelError("selectedIngredients", "Будь ласка, виберіть хоча б один інгредієнт для страви.");
-            }
-
             if (ModelState.IsValid)
             {
                 try
                 {
+                    // Завантажуємо страву з пов’язаними інгредієнтами та кухарями
                     var dishToUpdate = await _context.Dishes
                         .Include(d => d.Ingredients)
+                        .Include(d => d.Cooks)
                         .FirstOrDefaultAsync(d => d.Id == id);
 
                     if (dishToUpdate == null)
@@ -763,13 +789,15 @@ namespace RestaurantInfrastructure.Controllers
                         return NotFound();
                     }
 
+                    // Оновлюємо основні поля страви
                     dishToUpdate.Name = dish.Name;
                     dishToUpdate.Price = dish.Price;
                     dishToUpdate.Receipt = dish.Receipt;
                     dishToUpdate.Calories = dish.Calories;
                     dishToUpdate.CategoryId = dish.CategoryId;
 
-                    dishToUpdate.Ingredients.Clear();
+                    // Оновлюємо інгредієнти
+                    dishToUpdate.Ingredients.Clear();  // Очищаємо поточні інгредієнти
                     if (selectedIngredients != null)
                     {
                         var ingredientsToAdd = await _context.Ingredients
@@ -777,10 +805,20 @@ namespace RestaurantInfrastructure.Controllers
                             .ToListAsync();
                         foreach (var ingredient in ingredientsToAdd)
                         {
-                            if (!dishToUpdate.Ingredients.Any(i => i.Id == ingredient.Id))
-                            {
-                                dishToUpdate.Ingredients.Add(ingredient);
-                            }
+                            dishToUpdate.Ingredients.Add(ingredient);
+                        }
+                    }
+
+                    // Оновлюємо кухарів
+                    dishToUpdate.Cooks.Clear();  // Очищаємо поточних кухарів
+                    if (selectedCooks != null)
+                    {
+                        var cooksToAdd = await _context.Cooks
+                            .Where(c => selectedCooks.Contains(c.Id))
+                            .ToListAsync();
+                        foreach (var cook in cooksToAdd)
+                        {
+                            dishToUpdate.Cooks.Add(cook);
                         }
                     }
 
@@ -800,11 +838,12 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            // Якщо валідація не пройшла, повертаємо форму з даними
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
             ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", selectedIngredients);
+            ViewData["Cooks"] = new MultiSelectList(_context.Cooks, "Id", "Surname", selectedCooks);
             return View(dish);
         }
-
         // GET: Dishes/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
@@ -1925,12 +1964,12 @@ namespace RestaurantInfrastructure.Models
             <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <label asp-for="Name" class="control-label"></label>
-                <input asp-for="Name" class="form-control" data-val-regex="Назва страви повинна містити хоча б одну букву." data-val-regex-pattern="^(?=.*[a-zA-Zа-яА-Я]).+$" />
+                <input asp-for="Name" class="form-control" />
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Price" class="control-label"></label>
-                <input asp-for="Price" class="form-control" type="number" step="0.01" data-val-number="Ціна повинна бути числом." data-val-range="Ціна повинна бути в межах від 0.01 до 10000." data-val-range-min="0.01" data-val-range-max="10000" />
+                <input asp-for="Price" class="form-control" />
                 <span asp-validation-for="Price" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -1940,7 +1979,7 @@ namespace RestaurantInfrastructure.Models
             </div>
             <div class="form-group">
                 <label asp-for="Calories" class="control-label"></label>
-                <input asp-for="Calories" class="form-control" type="number" data-val-number="Калорійність повинна бути числом." data-val-range="Калорійність повинна бути в межах від 1 до 10000." data-val-range-min="1" data-val-range-max="10000" />
+                <input asp-for="Calories" class="form-control" />
                 <span asp-validation-for="Calories" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -1951,10 +1990,10 @@ namespace RestaurantInfrastructure.Models
             <div class="form-group">
                 <label class="control-label">Інгредієнти</label>
                 <select name="selectedIngredients" multiple class="form-control" asp-items="ViewBag.Ingredients"></select>
-                @if (ViewData.ModelState.ContainsKey("selectedIngredients") && ViewData.ModelState["selectedIngredients"].Errors.Any())
-                {
-                    <span class="text-danger">@ViewData.ModelState["selectedIngredients"].Errors.First().ErrorMessage</span>
-                }
+            </div>
+            <div class="form-group">
+                <label class="control-label">Кухарі</label>
+                <select name="selectedCooks" multiple class="form-control" asp-items="ViewBag.Cooks"></select>
             </div>
             <div class="form-group">
                 <input type="submit" value="Зберегти" class="btn btn-primary" />

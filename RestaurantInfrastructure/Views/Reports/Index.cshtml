@@ -1,0 +1,58 @@
+﻿<!-- Views/Reports/Index.cshtml -->
+@model dynamic
+
+@{
+    ViewData["Title"] = "Звіти";
+}
+
+<h1>Звіти</h1>
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">
+        @TempData["Error"]
+    </div>
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">
+        @TempData["Success"]
+    </div>
+}
+
+<form asp-action="Export" method="post">
+    <h3>Експорт даних</h3>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="exportCategories" name="exportCategories">
+        <label class="form-check-label" for="exportCategories">Категорії</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="exportCooks" name="exportCooks">
+        <label class="form-check-label" for="exportCooks">Кухарі</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="exportDishes" name="exportDishes">
+        <label class="form-check-label" for="exportDishes">Страви</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="exportIngredients" name="exportIngredients">
+        <label class="form-check-label" for="exportIngredients">Інгредієнти</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="exportRestaurants" name="exportRestaurants">
+        <label class="form-check-label" for="exportRestaurants">Ресторани</label>
+    </div>
+    <button type="submit" class="btn btn-primary mt-2">Експортувати</button>
+</form>
+
+<hr />
+
+<form asp-action="Import" method="post" enctype="multipart/form-data">
+    <h3>Імпорт даних</h3>
+    <div class="form-group">
+        <label for="importFile">Виберіть файл Excel:</label>
+        <input type="file" class="form-control-file" id="importFile" name="importFile" accept=".xlsx">
+    </div>
+    <button type="submit" class="btn btn-primary mt-2">Імпортувати</button>
+</form>
