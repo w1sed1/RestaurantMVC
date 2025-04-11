@@ -92,52 +92,47 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var dish = await _context.Dishes
-                .Include(d => d.Ingredients) // Завантажуємо поточні інгредієнти
                 .Include(d => d.Category)
-                .FirstOrDefaultAsync(d => d.Id == id);
+                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
+                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
+                .FirstOrDefaultAsync(m => m.Id == id);
 
             if (dish == null)
             {
                 return NotFound();
             }
 
+            // Передаємо список категорій для вибору
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
-            // Передаємо список усіх інгредієнтів для вибору
+
+            // Передаємо список інгредієнтів для вибору (MultiSelectList)
             ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", dish.Ingredients.Select(i => i.Id));
+
+            // Передаємо список кухарів для вибору (MultiSelectList)
+            ViewData["Cooks"] = new MultiSelectList(_context.Cooks, "Id", "Surname", dish.Cooks.Select(c => c.Id));
+
             return View(dish);
         }
-
+        // POST: Dishes/Edit/5
         // POST: Dishes/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish, int[] selectedIngredients)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,Price,Receipt,Calories,CategoryId")] Dish dish, int[] selectedIngredients, int[] selectedCooks)
         {
             if (id != dish.Id)
             {
                 return NotFound();
             }
-
             ModelState.Remove("Name");
             ModelState.Remove("Category");
-
-            // Перевірка унікальності назви (виключаємо поточну страву)
-            if (await _context.Dishes.AnyAsync(d => d.Name == dish.Name && d.Id != dish.Id))
-            {
-                ModelState.AddModelError("Name", "Страва з такою назвою вже існує.");
-            }
-
-            // Перевірка, чи вибрано хоча б один інгредієнт
-            if (selectedIngredients == null || !selectedIngredients.Any())
-            {
-                ModelState.AddModelError("selectedIngredients", "Будь ласка, виберіть хоча б один інгредієнт для страви.");
-            }
-
             if (ModelState.IsValid)
             {
                 try
                 {
+                    // Завантажуємо страву з пов’язаними інгредієнтами та кухарями
                     var dishToUpdate = await _context.Dishes
                         .Include(d => d.Ingredients)
+                        .Include(d => d.Cooks)
                         .FirstOrDefaultAsync(d => d.Id == id);
 
                     if (dishToUpdate == null)
@@ -145,13 +140,15 @@ namespace RestaurantInfrastructure.Controllers
                         return NotFound();
                     }
 
+                    // Оновлюємо основні поля страви
                     dishToUpdate.Name = dish.Name;
                     dishToUpdate.Price = dish.Price;
                     dishToUpdate.Receipt = dish.Receipt;
                     dishToUpdate.Calories = dish.Calories;
                     dishToUpdate.CategoryId = dish.CategoryId;
 
-                    dishToUpdate.Ingredients.Clear();
+                    // Оновлюємо інгредієнти
+                    dishToUpdate.Ingredients.Clear();  // Очищаємо поточні інгредієнти
                     if (selectedIngredients != null)
                     {
                         var ingredientsToAdd = await _context.Ingredients
@@ -159,10 +156,20 @@ namespace RestaurantInfrastructure.Controllers
                             .ToListAsync();
                         foreach (var ingredient in ingredientsToAdd)
                         {
-                            if (!dishToUpdate.Ingredients.Any(i => i.Id == ingredient.Id))
-                            {
-                                dishToUpdate.Ingredients.Add(ingredient);
-                            }
+                            dishToUpdate.Ingredients.Add(ingredient);
+                        }
+                    }
+
+                    // Оновлюємо кухарів
+                    dishToUpdate.Cooks.Clear();  // Очищаємо поточних кухарів
+                    if (selectedCooks != null)
+                    {
+                        var cooksToAdd = await _context.Cooks
+                            .Where(c => selectedCooks.Contains(c.Id))
+                            .ToListAsync();
+                        foreach (var cook in cooksToAdd)
+                        {
+                            dishToUpdate.Cooks.Add(cook);
                         }
                     }
 
@@ -182,11 +189,12 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            // Якщо валідація не пройшла, повертаємо форму з даними
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
             ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", selectedIngredients);
+            ViewData["Cooks"] = new MultiSelectList(_context.Cooks, "Id", "Surname", selectedCooks);
             return View(dish);
         }
-
         // GET: Dishes/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
@@ -197,7 +205,10 @@ namespace RestaurantInfrastructure.Controllers
 
             var dish = await _context.Dishes
                 .Include(d => d.Category)
+                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
+                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (dish == null)
             {
                 return NotFound();
@@ -205,22 +216,33 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(dish);
         }
-
+        // POST: Dishes/Delete/5
         // POST: Dishes/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var dish = await _context.Dishes.FindAsync(id);
+            var dish = await _context.Dishes
+                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
+                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
+                .FirstOrDefaultAsync(d => d.Id == id);
+
             if (dish != null)
             {
+                // Очищаємо зв’язки з кухарями
+                dish.Cooks.Clear();
+
+                // Очищаємо зв’язки з інгредієнтами
+                dish.Ingredients.Clear();
+
+                // Видаляємо страву
                 _context.Dishes.Remove(dish);
+
+                await _context.SaveChangesAsync();
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
-
         private bool DishExists(int id)
         {
             return _context.Dishes.Any(e => e.Id == id);

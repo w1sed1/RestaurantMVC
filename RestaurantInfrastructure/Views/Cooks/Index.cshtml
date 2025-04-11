@@ -38,7 +38,7 @@
                     @Html.DisplayFor(modelItem => item.DateOfBirth)
                 </td>
                 <td>
-                    @Html.DisplayFor(modelItem => item.Restaurant.Name)
+                    @(item.Restaurant != null ? Html.DisplayFor(modelItem => item.Restaurant.Name) : "Немає ресторану")
                 </td>
                 <td>
                     @if (item.Dishes.Any())
@@ -46,7 +46,7 @@
                         <ul>
                             @foreach (var dish in item.Dishes)
                             {
-                                <li>@dish.Name</li> <!-- Замінюємо Price і Receipt на Name -->
+                                <li>@dish.Name</li>
                             }
                         </ul>
                     }

@@ -55,16 +55,36 @@ public partial class Cook : Entity
 {
     public int RestaurantId { get; set; }
 
+    [Required(ErrorMessage = "Прізвище кухаря є обов'язковим.")]
+    [StringLength(100, MinimumLength = 2, ErrorMessage = "Прізвище кухаря повинно містити від 2 до 100 символів.")]
+    [RegularExpression(@"^(?=.*[a-zA-Zа-яА-Я]).+$", ErrorMessage = "Прізвище кухаря повинно містити хоча б одну букву.")]
     [Display(Name = "Прізвище")]
     public string Surname { get; set; } = null!;
 
+    [Required(ErrorMessage = "Дата народження є обов'язковою.")]
+    [DataType(DataType.Date)]
     [Display(Name = "Дата народження")]
+    [CustomValidation(typeof(Cook), nameof(ValidateDateOfBirth))]
     public DateOnly? DateOfBirth { get; set; }
 
     [Display(Name = "Ресторан")]
     public virtual Restaurant Restaurant { get; set; } = null!;
 
     public virtual ICollection<Dish> Dishes { get; set; } = new List<Dish>();
+    public static ValidationResult? ValidateDateOfBirth(DateOnly? date, ValidationContext context)
+    {
+        if (date == null)
+            return new ValidationResult("Дата народження є обов'язковою.");
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var minDate = today.AddYears(-70); 
+        var maxDate = today.AddYears(-18);  
+
+        if (date < minDate || date > maxDate)
+            return new ValidationResult("Дата народження має бути між " + minDate.ToString("yyyy-MM-dd") + " і " + maxDate.ToString("yyyy-MM-dd") + ".");
+
+        return ValidationResult.Success;
+    }
 }
 
 
@@ -164,9 +184,15 @@ namespace RestaurantDomain.Models;
 
 public partial class Restaurant : Entity
 {
+    [Required(ErrorMessage = "Назва ресторану є обов'язковою.")]
+    [StringLength(100, MinimumLength = 2, ErrorMessage = "Назва ресторану повинна містити від 2 до 100 символів.")]
+    [RegularExpression(@"^(вул\.|просп\.|пл\.|бул\.)\s*[a-zA-Zа-яА-ЯїЇіІєЄ\s\-']+\s+\d+[a-zA-Zа-яА-Я]?$",
+        ErrorMessage = "Локація повинна містити тип (вул., просп., пл., бул.), назву з букв та номер будинку з цифр")]
     [Display(Name = "Локація")]
     public string Name { get; set; } = null!;
-
+    
+    [RegularExpression(@"^\+380\d{9}$", ErrorMessage = "Контакти повинні бути у форматі +380xxxxxxxxx")]
+    [StringLength(12, MinimumLength = 12, ErrorMessage = "Номер телефону повинен містити рівно 12 символів (+380 і 9 цифр).")]
     [Display(Name = "Контакти")]
     public string? Contacts { get; set; }
 
@@ -432,15 +458,14 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // GET: Cooks/Create
+        // GET: Cooks/Create
         public IActionResult Create()
         {
-            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name");
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);  // Дозволяємо null як вибране значення
             return View();
         }
 
         // POST: Cooks/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
@@ -456,7 +481,7 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
             return View(cook);
         }
-
+        // GET: Cooks/Edit/5
         // GET: Cooks/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
@@ -467,7 +492,7 @@ namespace RestaurantInfrastructure.Controllers
 
             var cook = await _context.Cooks
                 .Include(c => c.Restaurant)
-                .Include(c => c.Dishes) // Завантажуємо поточні страви кухаря
+                .Include(c => c.Dishes)
                 .FirstOrDefaultAsync(m => m.Id == id);
 
             if (cook == null)
@@ -475,18 +500,12 @@ namespace RestaurantInfrastructure.Controllers
                 return NotFound();
             }
 
-            // Передаємо список ресторанів для вибору
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
-
-            // Передаємо список усіх страв для вибору (з ID і Name)
             ViewData["Dishes"] = new MultiSelectList(_context.Dishes, "Id", "Name", cook.Dishes.Select(d => d.Id));
-
             return View(cook);
         }
 
         // POST: Cooks/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("Id,Surname,DateOfBirth,RestaurantId")] Cook cook, int[] selectedDishes)
@@ -501,7 +520,6 @@ namespace RestaurantInfrastructure.Controllers
             {
                 try
                 {
-                    // Завантажуємо існуючого кухаря з бази разом із його стравами
                     var cookToUpdate = await _context.Cooks
                         .Include(c => c.Dishes)
                         .FirstOrDefaultAsync(c => c.Id == id);
@@ -511,16 +529,11 @@ namespace RestaurantInfrastructure.Controllers
                         return NotFound();
                     }
 
-                    // Оновлюємо основні поля кухаря
                     cookToUpdate.Surname = cook.Surname;
                     cookToUpdate.DateOfBirth = cook.DateOfBirth;
                     cookToUpdate.RestaurantId = cook.RestaurantId;
 
-                    // Оновлюємо список страв
-                    // Спочатку очищаємо поточні страви
                     cookToUpdate.Dishes.Clear();
-
-                    // Додаємо нові страви, які вибрав користувач
                     if (selectedDishes != null)
                     {
                         var dishesToAdd = await _context.Dishes
@@ -532,7 +545,6 @@ namespace RestaurantInfrastructure.Controllers
                         }
                     }
 
-                    // Зберігаємо зміни
                     await _context.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
@@ -549,7 +561,6 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Якщо модель невалідна, повертаємо форму з даними
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
             ViewData["Dishes"] = new MultiSelectList(_context.Dishes, "Id", "Name", selectedDishes);
             return View(cook);
@@ -564,7 +575,9 @@ namespace RestaurantInfrastructure.Controllers
 
             var cook = await _context.Cooks
                 .Include(c => c.Restaurant)
+                .Include(c => c.Dishes)  // Завантажуємо пов’язані страви
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (cook == null)
             {
                 return NotFound();
@@ -572,22 +585,28 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(cook);
         }
-
         // POST: Cooks/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var cook = await _context.Cooks.FindAsync(id);
+            var cook = await _context.Cooks
+                .Include(c => c.Dishes)  // Завантажуємо пов’язані страви
+                .FirstOrDefaultAsync(c => c.Id == id);
+
             if (cook != null)
             {
+                // Очищаємо зв’язки зі стравами
+                cook.Dishes.Clear();
+
+                // Видаляємо кухаря
                 _context.Cooks.Remove(cook);
+
+                await _context.SaveChangesAsync();
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
-
         private bool CookExists(int id)
         {
             return _context.Cooks.Any(e => e.Id == id);
@@ -796,7 +815,10 @@ namespace RestaurantInfrastructure.Controllers
 
             var dish = await _context.Dishes
                 .Include(d => d.Category)
+                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
+                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (dish == null)
             {
                 return NotFound();
@@ -804,22 +826,33 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(dish);
         }
-
+        // POST: Dishes/Delete/5
         // POST: Dishes/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var dish = await _context.Dishes.FindAsync(id);
+            var dish = await _context.Dishes
+                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
+                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
+                .FirstOrDefaultAsync(d => d.Id == id);
+
             if (dish != null)
             {
+                // Очищаємо зв’язки з кухарями
+                dish.Cooks.Clear();
+
+                // Очищаємо зв’язки з інгредієнтами
+                dish.Ingredients.Clear();
+
+                // Видаляємо страву
                 _context.Dishes.Remove(dish);
+
+                await _context.SaveChangesAsync();
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
-
         private bool DishExists(int id)
         {
             return _context.Dishes.Any(e => e.Id == id);
@@ -1034,6 +1067,7 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // GET: Ingredients/Delete/5
+        // GET: Ingredients/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -1042,8 +1076,9 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
-                .Include(i => i.Dishes) // Завантажуємо страви для видалення
+                .Include(i => i.Dishes)  // Завантажуємо страви для деталей
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (ingredient == null)
             {
                 return NotFound();
@@ -1051,19 +1086,26 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(ingredient);
         }
-
         // POST: Ingredients/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var ingredient = await _context.Ingredients.FindAsync(id);
+            var ingredient = await _context.Ingredients
+                .Include(i => i.Dishes)  // Завантажуємо пов’язані страви
+                .FirstOrDefaultAsync(i => i.Id == id);
+
             if (ingredient != null)
             {
+                // Очищаємо зв’язки зі стравами
+                ingredient.Dishes.Clear();
+
+                // Видаляємо інгредієнт
                 _context.Ingredients.Remove(ingredient);
+
+                await _context.SaveChangesAsync();
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
@@ -1121,29 +1163,28 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // GET: Restaurants/Create
+        // GET: Cooks/Create
         public IActionResult Create()
         {
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);  // Дозволяємо null
             return View();
         }
 
-        // POST: Restaurants/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        // POST: Cooks/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
+        public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
         {
-
             ModelState.Remove("Name");
             if (ModelState.IsValid)
             {
-                _context.Add(restaurant);
+                _context.Add(cook);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
-            return View(restaurant);
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
+            return View(cook);
         }
-
         // GET: Restaurants/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
@@ -1161,8 +1202,6 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // POST: Restaurants/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
@@ -1194,7 +1233,7 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(restaurant);
         }
-
+        // GET: Restaurants/Delete/5
         // GET: Restaurants/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
@@ -1204,7 +1243,9 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var restaurant = await _context.Restaurants
+                .Include(r => r.Cooks)  // Завантажуємо пов’язаних кухарів
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (restaurant == null)
             {
                 return NotFound();
@@ -1212,22 +1253,28 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(restaurant);
         }
-
         // POST: Restaurants/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var restaurant = await _context.Restaurants.FindAsync(id);
+            var restaurant = await _context.Restaurants
+                .Include(r => r.Cooks)  // Завантажуємо пов’язаних кухарів
+                .FirstOrDefaultAsync(r => r.Id == id);
+
             if (restaurant != null)
             {
+                // Очищаємо колекцію Cooks у ресторані
+                restaurant.Cooks.Clear();
+
+                // Видаляємо ресторан
                 _context.Restaurants.Remove(restaurant);
+
+                await _context.SaveChangesAsync();
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
-
         private bool RestaurantExists(int id)
         {
             return _context.Restaurants.Any(e => e.Id == id);
@@ -1444,11 +1491,14 @@ namespace RestaurantInfrastructure.Models
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Create">
+        <form asp-action="Create" novalidate>
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="form-group">
                 <label asp-for="RestaurantId" class="control-label"></label>
-                <select asp-for="RestaurantId" class="form-control" asp-items="ViewBag.RestaurantId"></select>
+                <select asp-for="RestaurantId" class="form-control" asp-items="ViewBag.RestaurantId">
+                    <option value="">-- Виберіть ресторан (необов’язково) --</option>
+                </select>
+                <span asp-validation-for="RestaurantId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Surname" class="control-label"></label>
@@ -1457,7 +1507,7 @@ namespace RestaurantInfrastructure.Models
             </div>
             <div class="form-group">
                 <label asp-for="DateOfBirth" class="control-label"></label>
-                <input asp-for="DateOfBirth" class="form-control" />
+                <input asp-for="DateOfBirth" class="form-control" type="date" />
                 <span asp-validation-for="DateOfBirth" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -1476,7 +1526,6 @@ namespace RestaurantInfrastructure.Models
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
 }
-
 
 // ==== Views\Cooks\Delete.cshtml ====
 @model RestaurantDomain.Models.Cook
@@ -1508,7 +1557,25 @@ namespace RestaurantInfrastructure.Models
             @Html.DisplayNameFor(model => model.Restaurant)
         </dt>
         <dd class="col-sm-10">
-            @Html.DisplayFor(model => model.Restaurant.Name)
+            @(Model.Restaurant != null ? Html.DisplayFor(model => Model.Restaurant.Name) : "Немає ресторану")
+        </dd>
+        <dt class="col-sm-2">
+            Страви
+        </dt>
+        <dd class="col-sm-10">
+            @if (Model.Dishes.Any())
+            {
+                <ul>
+                    @foreach (var dish in Model.Dishes)
+                    {
+                        <li>@dish.Name</li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <span>Немає призначених страв</span>
+            }
         </dd>
     </dl>
 
@@ -1518,7 +1585,6 @@ namespace RestaurantInfrastructure.Models
         <a asp-action="Index">Повернутися до списку</a>
     </form>
 </div>
-
 
 // ==== Views\Cooks\Details.cshtml ====
 @model RestaurantDomain.Models.Cook
@@ -1549,7 +1615,7 @@ namespace RestaurantInfrastructure.Models
             @Html.DisplayNameFor(model => model.Restaurant)
         </dt>
         <dd class="col-sm-10">
-            @Html.DisplayFor(model => model.Restaurant.Name)
+            @(Model.Restaurant != null ? Html.DisplayFor(model => Model.Restaurant.Name) : "Немає ресторану")
         </dd>
     </dl>
 </div>
@@ -1557,7 +1623,6 @@ namespace RestaurantInfrastructure.Models
     <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
     <a asp-action="Index">Повернутися до списку</a>
 </div>
-
 
 // ==== Views\Cooks\Edit.cshtml ====
 @model RestaurantDomain.Models.Cook
@@ -1572,7 +1637,7 @@ namespace RestaurantInfrastructure.Models
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Edit">
+        <form asp-action="Edit" novalidate>
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
             <div class="form-group">
@@ -1582,12 +1647,14 @@ namespace RestaurantInfrastructure.Models
             </div>
             <div class="form-group">
                 <label asp-for="DateOfBirth" class="control-label"></label>
-                <input asp-for="DateOfBirth" class="form-control" />
+                <input asp-for="DateOfBirth" class="form-control" type="date" />
                 <span asp-validation-for="DateOfBirth" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="RestaurantId" class="control-label"></label>
-                <select asp-for="RestaurantId" class="form-control" asp-items="ViewBag.RestaurantId"></select>
+                <select asp-for="RestaurantId" class="form-control" asp-items="ViewBag.RestaurantId">
+                    <option value="">-- Виберіть ресторан (необов’язково) --</option>
+                </select>
                 <span asp-validation-for="RestaurantId" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -1610,7 +1677,6 @@ namespace RestaurantInfrastructure.Models
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
 }
-
 
 // ==== Views\Cooks\Index.cshtml ====
 @model IEnumerable<RestaurantDomain.Models.Cook>
@@ -1653,7 +1719,7 @@ namespace RestaurantInfrastructure.Models
                     @Html.DisplayFor(modelItem => item.DateOfBirth)
                 </td>
                 <td>
-                    @Html.DisplayFor(modelItem => item.Restaurant.Name)
+                    @(item.Restaurant != null ? Html.DisplayFor(modelItem => item.Restaurant.Name) : "Немає ресторану")
                 </td>
                 <td>
                     @if (item.Dishes.Any())
@@ -1661,7 +1727,7 @@ namespace RestaurantInfrastructure.Models
                         <ul>
                             @foreach (var dish in item.Dishes)
                             {
-                                <li>@dish.Name</li> <!-- Замінюємо Price і Receipt на Name -->
+                                <li>@dish.Name</li>
                             }
                         </ul>
                     }
@@ -1679,7 +1745,6 @@ namespace RestaurantInfrastructure.Models
         }
     </tbody>
 </table>
-
 
 // ==== Views\Dishes\Create.cshtml ====
 @model RestaurantDomain.Models.Dish
@@ -2421,17 +2486,17 @@ namespace RestaurantInfrastructure.Models
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="form-group">
                 <label asp-for="Name" class="control-label"></label>
-                <input asp-for="Name" class="form-control" />
+                <input asp-for="Name" class="form-control" placeholder="вул. Шевченка 12" />
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Contacts" class="control-label"></label>
-                <input asp-for="Contacts" class="form-control" />
+                <input asp-for="Contacts" class="form-control" placeholder="+380xxxxxxxxx" />
                 <span asp-validation-for="Contacts" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Reviews" class="control-label"></label>
-                <input asp-for="Reviews" class="form-control" />
+                <textarea asp-for="Reviews" class="form-control" placeholder="Введіть відгуки (необов'язково)"></textarea>
                 <span asp-validation-for="Reviews" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -2450,7 +2515,6 @@ namespace RestaurantInfrastructure.Models
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
 }
-
 
 // ==== Views\Restaurants\Delete.cshtml ====
 @model RestaurantDomain.Models.Restaurant
@@ -2484,6 +2548,25 @@ namespace RestaurantInfrastructure.Models
         <dd class="col-sm-10">
             @Html.DisplayFor(model => model.Reviews)
         </dd>
+        <dt class="col-sm-2">
+            Кухарі
+        </dt>
+        <dd class="col-sm-10">
+            @if (Model.Cooks.Any())
+            {
+                <ul>
+                    @foreach (var cook in Model.Cooks)
+                    {
+                        <li>@cook.Surname</li>
+                    }
+                </ul>
+                <p class="text-warning">Ці кухарі будуть відв’язані від ресторану.</p>
+            }
+            else
+            {
+                <span>Немає пов’язаних кухарів.</span>
+            }
+        </dd>
     </dl>
 
     <form asp-action="Delete">
@@ -2492,7 +2575,6 @@ namespace RestaurantInfrastructure.Models
         <a asp-action="Index">Повернутися до списку</a>
     </form>
 </div>
-
 
 // ==== Views\Restaurants\Details.cshtml ====
 @model RestaurantDomain.Models.Restaurant
@@ -2532,7 +2614,6 @@ namespace RestaurantInfrastructure.Models
     <a asp-action="Index">Повернутися до списку</a>
 </div>
 
-
 // ==== Views\Restaurants\Edit.cshtml ====
 @model RestaurantDomain.Models.Restaurant
 
@@ -2548,22 +2629,22 @@ namespace RestaurantInfrastructure.Models
     <div class="col-md-4">
         <form asp-action="Edit">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <label asp-for="Name" class="control-label"></label>
-                <input asp-for="Name" class="form-control" />
+                <input asp-for="Name" class="form-control" placeholder="вул. Шевченка 12" />
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Contacts" class="control-label"></label>
-                <input asp-for="Contacts" class="form-control" />
+                <input asp-for="Contacts" class="form-control" placeholder="+380xxxxxxxxx" />
                 <span asp-validation-for="Contacts" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Reviews" class="control-label"></label>
-                <input asp-for="Reviews" class="form-control" />
+                <textarea asp-for="Reviews" class="form-control" placeholder="Введіть відгуки (необов'язково)"></textarea>
                 <span asp-validation-for="Reviews" class="text-danger"></span>
             </div>
-            <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <input type="submit" value="Зберегти" class="btn btn-primary" />
             </div>
@@ -2580,7 +2661,6 @@ namespace RestaurantInfrastructure.Models
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
 }
-
 
 // ==== Views\Restaurants\Index.cshtml ====
 @model IEnumerable<RestaurantDomain.Models.Restaurant>

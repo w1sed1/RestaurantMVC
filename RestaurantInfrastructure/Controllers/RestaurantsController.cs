@@ -44,23 +44,27 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // GET: Restaurants/Create
+        // GET: Cooks/Create
         public IActionResult Create()
         {
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);  // Дозволяємо null
             return View();
         }
 
-        // POST: Restaurants/Create
+        // POST: Cooks/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
+        public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
         {
+            ModelState.Remove("Name");
             if (ModelState.IsValid)
             {
-                _context.Add(restaurant);
+                _context.Add(cook);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
-            return View(restaurant);
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
+            return View(cook);
         }
         // GET: Restaurants/Edit/5
         public async Task<IActionResult> Edit(int? id)
@@ -87,7 +91,7 @@ namespace RestaurantInfrastructure.Controllers
             {
                 return NotFound();
             }
-
+            ModelState.Remove("Name");
             if (ModelState.IsValid)
             {
                 try
@@ -111,6 +115,7 @@ namespace RestaurantInfrastructure.Controllers
             return View(restaurant);
         }
         // GET: Restaurants/Delete/5
+        // GET: Restaurants/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -119,7 +124,9 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var restaurant = await _context.Restaurants
+                .Include(r => r.Cooks)  // Завантажуємо пов’язаних кухарів
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (restaurant == null)
             {
                 return NotFound();
@@ -127,22 +134,28 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(restaurant);
         }
-
         // POST: Restaurants/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var restaurant = await _context.Restaurants.FindAsync(id);
+            var restaurant = await _context.Restaurants
+                .Include(r => r.Cooks)  // Завантажуємо пов’язаних кухарів
+                .FirstOrDefaultAsync(r => r.Id == id);
+
             if (restaurant != null)
             {
+                // Очищаємо колекцію Cooks у ресторані
+                restaurant.Cooks.Clear();
+
+                // Видаляємо ресторан
                 _context.Restaurants.Remove(restaurant);
+
+                await _context.SaveChangesAsync();
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
-
         private bool RestaurantExists(int id)
         {
             return _context.Restaurants.Any(e => e.Id == id);

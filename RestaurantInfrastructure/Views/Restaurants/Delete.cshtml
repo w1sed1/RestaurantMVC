@@ -29,6 +29,25 @@
         <dd class="col-sm-10">
             @Html.DisplayFor(model => model.Reviews)
         </dd>
+        <dt class="col-sm-2">
+            Кухарі
+        </dt>
+        <dd class="col-sm-10">
+            @if (Model.Cooks.Any())
+            {
+                <ul>
+                    @foreach (var cook in Model.Cooks)
+                    {
+                        <li>@cook.Surname</li>
+                    }
+                </ul>
+                <p class="text-warning">Ці кухарі будуть відв’язані від ресторану.</p>
+            }
+            else
+            {
+                <span>Немає пов’язаних кухарів.</span>
+            }
+        </dd>
     </dl>
 
     <form asp-action="Delete">

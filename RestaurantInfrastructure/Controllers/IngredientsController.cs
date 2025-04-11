@@ -139,6 +139,7 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // GET: Ingredients/Delete/5
+        // GET: Ingredients/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -147,8 +148,9 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
-                .Include(i => i.Dishes) // Завантажуємо страви для видалення
+                .Include(i => i.Dishes)  // Завантажуємо страви для деталей
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (ingredient == null)
             {
                 return NotFound();
@@ -156,19 +158,26 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(ingredient);
         }
-
         // POST: Ingredients/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var ingredient = await _context.Ingredients.FindAsync(id);
+            var ingredient = await _context.Ingredients
+                .Include(i => i.Dishes)  // Завантажуємо пов’язані страви
+                .FirstOrDefaultAsync(i => i.Id == id);
+
             if (ingredient != null)
             {
+                // Очищаємо зв’язки зі стравами
+                ingredient.Dishes.Clear();
+
+                // Видаляємо інгредієнт
                 _context.Ingredients.Remove(ingredient);
+
+                await _context.SaveChangesAsync();
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
