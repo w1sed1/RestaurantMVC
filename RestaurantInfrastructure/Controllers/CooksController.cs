@@ -48,7 +48,6 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // GET: Cooks/Create
-        // GET: Cooks/Create
         public IActionResult Create()
         {
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);  // Дозволяємо null як вибране значення
@@ -60,18 +59,25 @@ namespace RestaurantInfrastructure.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
         {
+            
             ModelState.Remove("Surname");
             ModelState.Remove("Restaurant");
+
+            if (await _context.Cooks.AnyAsync(c => c.Surname == cook.Surname))
+            {
+                ModelState.AddModelError("Surname", "Кухар з таким прізвищем уже існує.");
+            }
+
             if (ModelState.IsValid)
             {
                 _context.Add(cook);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
+
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
             return View(cook);
         }
-        // GET: Cooks/Edit/5
         // GET: Cooks/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
@@ -104,8 +110,16 @@ namespace RestaurantInfrastructure.Controllers
             {
                 return NotFound();
             }
+
             ModelState.Remove("Surname");
             ModelState.Remove("Restaurant");
+
+            // Перевірка унікальності прізвища (виключаємо поточного кухаря)
+            if (await _context.Cooks.AnyAsync(c => c.Surname == cook.Surname && c.Id != cook.Id))
+            {
+                ModelState.AddModelError("Surname", "Кухар з таким прізвищем уже існує.");
+            }
+
             if (ModelState.IsValid)
             {
                 try
