@@ -1,10 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestaurantDomain.Models;
 
 namespace RestaurantInfrastructure
 {
-    public partial class RestaurantDbContext : DbContext
+    public partial class RestaurantDbContext : IdentityDbContext<ApplicationUser>
     {
         public RestaurantDbContext(DbContextOptions<RestaurantDbContext> options)
             : base(options)
@@ -20,6 +21,7 @@ namespace RestaurantInfrastructure
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<Category>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("PK__Categori__3214EC07DBFD7161");

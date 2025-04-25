@@ -26,6 +26,17 @@
 </Project>
 
 
+// ==== Model\ApplicationUser.cs ====
+using Microsoft.AspNetCore.Identity;
+
+namespace RestaurantDomain.Models
+{
+    public class ApplicationUser : IdentityUser
+    {
+        public string? FullName { get; set; }
+    }
+}
+
 // ==== Model\Category.cs ====
 using RestaurantDomain.Model;
 using System;
