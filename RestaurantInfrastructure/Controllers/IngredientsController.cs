@@ -119,7 +119,8 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // GET: Ingredients/Delete/5 (доступно для Admin)
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Chef")]
+
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -140,7 +141,8 @@ namespace RestaurantInfrastructure.Controllers
         // POST: Ingredients/Delete/5 (доступно для Admin)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Chef")]
+
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var ingredient = await _context.Ingredients.FindAsync(id);

@@ -21,9 +21,7 @@
             <th>
                 @Html.DisplayNameFor(model => model.Contacts)
             </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Reviews)
-            </th>
+            
             <th></th>
         </tr>
     </thead>
@@ -37,16 +35,7 @@
                 <td>
                     @Html.DisplayFor(modelItem => item.Contacts)
                 </td>
-                <td>
-                    @if (string.IsNullOrEmpty(item.Reviews))
-                    {
-                        <span>Немає відгуків.</span>
-                    }
-                    else
-                    {
-                        @Html.DisplayFor(modelItem => item.Reviews)
-                    }
-                </td>
+                
                 <td>
                     @if (User.IsInRole("Admin"))
                     {

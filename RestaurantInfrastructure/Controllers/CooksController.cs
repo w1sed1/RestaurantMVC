@@ -70,7 +70,10 @@ namespace RestaurantInfrastructure.Controllers
             {
                 ModelState.AddModelError("Surname", "Кухар з таким прізвищем уже існує.");
             }
-
+            if (!string.IsNullOrEmpty(cook.Surname))
+            {
+                cook.Surname = char.ToUpper(cook.Surname[0]) + cook.Surname.Substring(1).ToLower();
+            }
             if (ModelState.IsValid)
             {
                 _context.Add(cook);
@@ -123,6 +126,10 @@ namespace RestaurantInfrastructure.Controllers
             if (await _context.Cooks.AnyAsync(c => c.Surname == cook.Surname && c.Id != cook.Id))
             {
                 ModelState.AddModelError("Surname", "Кухар з таким прізвищем уже існує.");
+            }
+            if (!string.IsNullOrEmpty(cook.Surname))
+            {
+                cook.Surname = char.ToUpper(cook.Surname[0]) + cook.Surname.Substring(1).ToLower();
             }
 
             if (ModelState.IsValid)
