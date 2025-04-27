@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using RestaurantInfrastructure;
 using System.Threading.Tasks;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize(Roles = "Admin")]
     public class ReportsController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -26,7 +28,6 @@ namespace RestaurantInfrastructure.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Export()
         {
-            // Отримуємо вибір користувача
             bool exportCategories = Request.Form["exportCategories"] == "on";
             bool exportCooks = Request.Form["exportCooks"] == "on";
             bool exportDishes = Request.Form["exportDishes"] == "on";
@@ -39,7 +40,6 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction("Index");
             }
 
-            // Викликаємо експорт
             var stream = await _exportHelper.ExportToExcelAsync(_context, exportCategories, exportCooks, exportDishes, exportIngredients, exportRestaurants);
             return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "RestaurantData.xlsx");
         }
@@ -54,7 +54,6 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction("Index");
             }
 
-            // Викликаємо імпорт
             var (success, errors) = await _importHelper.ImportFromExcelAsync(importFile);
             if (!success && errors.Any())
             {

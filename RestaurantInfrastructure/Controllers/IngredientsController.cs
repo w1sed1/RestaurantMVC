@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize]
     public class IngredientsController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -19,23 +21,13 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Ingredients
+        //(GET: Ingredients (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
-            if (_context == null || _context.Ingredients == null)
-            {
-                return Problem("Entity set 'RestaurantDbContext.Ingredients' is null.");
-            }
-
-            // Завантажуємо інгредієнти разом із пов’язаними стравами
-            var ingredients = await _context.Ingredients
-                .Include(i => i.Dishes) // Додаємо Include для завантаження страв
-                .ToListAsync();
-
-            return View(ingredients);
+            return View(await _context.Ingredients.ToListAsync());
         }
 
-        // GET: Ingredients/Details/5
+        // GET: Ingredients/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -44,7 +36,6 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
-                .Include(i => i.Dishes) // Завантажуємо страви для деталей
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (ingredient == null)
             {
@@ -54,25 +45,19 @@ namespace RestaurantInfrastructure.Controllers
             return View(ingredient);
         }
 
-        // GET: Ingredients/Create
+        // GET: Ingredients/Create (доступно для Admin і Chef)
+        [Authorize(Roles = "Admin,Chef")]
         public IActionResult Create()
         {
             return View();
         }
 
-        // POST: Ingredients/Create
+        // POST: Ingredients/Create (доступно для Admin і Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
+        [Authorize(Roles = "Admin,Chef")]
+        public async Task<IActionResult> Create([Bind("Id,Name,WeightMeasure")] Ingredient ingredient)
         {
-            ModelState.Remove("Name");
-
-            // Перевірка унікальності назви
-            if (await _context.Ingredients.AnyAsync(i => i.Name == ingredient.Name))
-            {
-                ModelState.AddModelError("Name", "Інгредієнт з такою назвою вже існує.");
-            }
-
             if (ModelState.IsValid)
             {
                 _context.Add(ingredient);
@@ -81,7 +66,9 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(ingredient);
         }
-        // GET: Ingredients/Edit/5
+
+        // GET: Ingredients/Edit/5 (доступно для Admin і Chef)
+        [Authorize(Roles = "Admin,Chef")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -97,22 +84,15 @@ namespace RestaurantInfrastructure.Controllers
             return View(ingredient);
         }
 
-        // POST: Ingredients/Edit/5
+        // POST: Ingredients/Edit/5 (доступно для Admin і Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
+        [Authorize(Roles = "Admin,Chef")]
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,WeightMeasure")] Ingredient ingredient)
         {
             if (id != ingredient.Id)
             {
                 return NotFound();
-            }
-
-            ModelState.Remove("Name");
-
-            // Перевірка унікальності назви (виключаємо поточний інгредієнт)
-            if (await _context.Ingredients.AnyAsync(i => i.Name == ingredient.Name && i.Id != ingredient.Id))
-            {
-                ModelState.AddModelError("Name", "Інгредієнт з такою назвою вже існує.");
             }
 
             if (ModelState.IsValid)
@@ -138,8 +118,8 @@ namespace RestaurantInfrastructure.Controllers
             return View(ingredient);
         }
 
-        // GET: Ingredients/Delete/5
-        // GET: Ingredients/Delete/5
+        // GET: Ingredients/Delete/5 (доступно для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -148,9 +128,7 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
-                .Include(i => i.Dishes)  // Завантажуємо страви для деталей
                 .FirstOrDefaultAsync(m => m.Id == id);
-
             if (ingredient == null)
             {
                 return NotFound();
@@ -158,26 +136,20 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(ingredient);
         }
-        // POST: Ingredients/Delete/5
+
+        // POST: Ingredients/Delete/5 (доступно для Admin)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var ingredient = await _context.Ingredients
-                .Include(i => i.Dishes)  // Завантажуємо пов’язані страви
-                .FirstOrDefaultAsync(i => i.Id == id);
-
+            var ingredient = await _context.Ingredients.FindAsync(id);
             if (ingredient != null)
             {
-                // Очищаємо зв’язки зі стравами
-                ingredient.Dishes.Clear();
-
-                // Видаляємо інгредієнт
                 _context.Ingredients.Remove(ingredient);
-
-                await _context.SaveChangesAsync();
             }
 
+            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 

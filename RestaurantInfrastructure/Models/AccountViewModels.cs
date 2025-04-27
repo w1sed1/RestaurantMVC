@@ -6,26 +6,31 @@ namespace RestaurantInfrastructure.Models
     {
         [Required(ErrorMessage = "Електронна пошта є обов'язковою.")]
         [EmailAddress(ErrorMessage = "Неправильний формат електронної пошти.")]
-        public string? Email { get; set; }
+        [Display(Name = "Електронна пошта")]
+        public string Email { get; set; }
 
         [Required(ErrorMessage = "Пароль є обов'язковим.")]
         [DataType(DataType.Password)]
-        public string? Password { get; set; }
+        [Display(Name = "Пароль")]
+        public string Password { get; set; }
 
         [Required(ErrorMessage = "Ім'я є обов'язковим.")]
-        public string? FullName { get; set; }
+        [Display(Name = "Повне ім'я")]
+        public string FullName { get; set; }
     }
 
     public class LoginViewModel
     {
         [Required(ErrorMessage = "Електронна пошта є обов'язковою.")]
         [EmailAddress(ErrorMessage = "Неправильний формат електронної пошти.")]
-        public string? Email { get; set; }
+        [Display(Name = "Електронна пошта")]
+        public string Email { get; set; }
 
         [Required(ErrorMessage = "Пароль є обов'язковим.")]
         [DataType(DataType.Password)]
-        public string? Password { get; set; }
-
+        [Display(Name = "Пароль")]
+        public string Password { get; set; }
+        [Display(Name = "Запам'ятати мене")]
         public bool RememberMe { get; set; }
     }
 }

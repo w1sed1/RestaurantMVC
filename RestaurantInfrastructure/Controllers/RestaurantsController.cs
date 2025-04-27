@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize]
     public class RestaurantsController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -19,13 +21,13 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Restaurants
+        // GET: Restaurants (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
             return View(await _context.Restaurants.ToListAsync());
         }
 
-        // GET: Restaurants/Details/5
+        // GET: Restaurants/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -43,30 +45,31 @@ namespace RestaurantInfrastructure.Controllers
             return View(restaurant);
         }
 
-        // GET: Restaurants/Create
-        // GET: Cooks/Create
+        // GET: Restaurants/Create (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public IActionResult Create()
         {
-            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);  // Дозволяємо null
             return View();
         }
 
-        // POST: Cooks/Create
+        // POST: Restaurants/Create (лише для Admin)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Create([Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
         {
             ModelState.Remove("Name");
             if (ModelState.IsValid)
             {
-                _context.Add(cook);
+                _context.Add(restaurant);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
-            return View(cook);
+            return View(restaurant);
         }
-        // GET: Restaurants/Edit/5
+
+        // GET: Restaurants/Edit/5 (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -82,9 +85,10 @@ namespace RestaurantInfrastructure.Controllers
             return View(restaurant);
         }
 
-        // POST: Restaurants/Edit/5
+        // POST: Restaurants/Edit/5 (лише для Admin)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int id, [Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
         {
             if (id != restaurant.Id)
@@ -114,8 +118,9 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(restaurant);
         }
-        // GET: Restaurants/Delete/5
-        // GET: Restaurants/Delete/5
+
+        // GET: Restaurants/Delete/5 (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -124,7 +129,7 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var restaurant = await _context.Restaurants
-                .Include(r => r.Cooks)  // Завантажуємо пов’язаних кухарів
+                .Include(r => r.Cooks)
                 .FirstOrDefaultAsync(m => m.Id == id);
 
             if (restaurant == null)
@@ -134,28 +139,76 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(restaurant);
         }
-        // POST: Restaurants/Delete/5
+
+        // POST: Restaurants/Delete/5 (лише для Admin)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var restaurant = await _context.Restaurants
-                .Include(r => r.Cooks)  // Завантажуємо пов’язаних кухарів
+                .Include(r => r.Cooks)
                 .FirstOrDefaultAsync(r => r.Id == id);
 
             if (restaurant != null)
             {
-                // Очищаємо колекцію Cooks у ресторані
                 restaurant.Cooks.Clear();
-
-                // Видаляємо ресторан
                 _context.Restaurants.Remove(restaurant);
-
                 await _context.SaveChangesAsync();
             }
 
             return RedirectToAction(nameof(Index));
         }
+
+        // GET: Restaurants/AddReview/5 (доступно для User)
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult> AddReview(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var restaurant = await _context.Restaurants.FindAsync(id);
+            if (restaurant == null)
+            {
+                return NotFound();
+            }
+
+            return View(restaurant);
+        }
+
+        // POST: Restaurants/AddReview/5 (доступно для User)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult> AddReview(int id, string review)
+        {
+            var restaurant = await _context.Restaurants.FindAsync(id);
+            if (restaurant == null)
+            {
+                return NotFound();
+            }
+
+            if (string.IsNullOrEmpty(review))
+            {
+                ModelState.AddModelError("Reviews", "Відгук не може бути порожнім.");
+                return View(restaurant);
+            }
+
+            if (restaurant.Reviews == null)
+            {
+                restaurant.Reviews = review;
+            }
+            else
+            {
+                restaurant.Reviews += "\n" + review;
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
         private bool RestaurantExists(int id)
         {
             return _context.Restaurants.Any(e => e.Id == id);

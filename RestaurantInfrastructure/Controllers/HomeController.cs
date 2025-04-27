@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RestaurantInfrastructure;
@@ -18,9 +19,9 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
+        [AllowAnonymous] // Дозволяємо доступ для всіх
         public IActionResult Index()
         {
-            // Дані для кругової діаграми (розподіл страв за категоріями)
             var dishCategories = _context.Dishes
                 .Include(d => d.Category)
                 .GroupBy(d => d.Category.Description)
@@ -30,7 +31,6 @@ namespace RestaurantInfrastructure.Controllers
             var pieChartLabels = dishCategories.Select(c => c.Category).ToArray();
             var pieChartData = dishCategories.Select(c => c.Count).ToArray();
 
-            // Дані для стовпчикової діаграми (кількість кухарів у ресторанах)
             var cookRestaurants = _context.Cooks
                 .Include(c => c.Restaurant)
                 .GroupBy(c => c.Restaurant.Name)
@@ -40,7 +40,6 @@ namespace RestaurantInfrastructure.Controllers
             var barChartLabels = cookRestaurants.Select(r => r.Restaurant).ToArray();
             var barChartData = cookRestaurants.Select(r => r.Count).ToArray();
 
-            // Передаємо дані у ViewBag
             ViewBag.PieChartLabels = pieChartLabels;
             ViewBag.PieChartData = pieChartData;
             ViewBag.BarChartLabels = barChartLabels;
@@ -49,6 +48,7 @@ namespace RestaurantInfrastructure.Controllers
             return View();
         }
 
+        [Authorize] // Інші дії доступні лише авторизованим користувачам
         public IActionResult Privacy()
         {
             return View();

@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
       <PrivateAssets>all</PrivateAssets>
@@ -231,47 +233,32 @@ public partial class Restaurant : Entity
 }
 
 // ==== Program.cs ====
-// RestaurantInfrastructure/Program.cs
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using RestaurantDomain.Models;
 using RestaurantInfrastructure;
-using System.Globalization;
-using OfficeOpenXml; // ��� EPPlus
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ������������ ������ ��� EPPlus
-ExcelPackage.LicenseContext = LicenseContext.NonCommercial; // ������� ������������ ������������
-
-// ������ ������ �� ����������.
-builder.Services.AddControllersWithViews()
-    .AddViewLocalization(); // ������ �������� ���������� ��� ������������
-
-// ������������ ����������
-builder.Services.Configure<RequestLocalizationOptions>(options =>
-{
-    var supportedCultures = new[]
-    {
-        new CultureInfo("uk-UA"),  // ��������� ��������
-        new CultureInfo("en-US")   // ��������� �������� (�� �������������)
-    };
-
-    options.DefaultRequestCulture = new Microsoft.AspNetCore.Localization.RequestCulture("uk-UA");
-    options.SupportedCultures = supportedCultures;
-    options.SupportedUICultures = supportedCultures;
-});
-
-// ������������ ��������� ���� �����
+// ������ DbContext
 builder.Services.AddDbContext<RestaurantDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// ������ Identity
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+    .AddEntityFrameworkStores<RestaurantDbContext>()
+    .AddDefaultTokenProviders();
+
+// ������������ �������������� �� �����������
+builder.Services.AddAuthentication();
+builder.Services.AddAuthorization();
+
+// ������ ���������� �� �������������
+builder.Services.AddControllersWithViews();
+
 var app = builder.Build();
 
-// ������������ ������� ������
+// ������������ ������� �������
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
@@ -281,24 +268,165 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-// ������ middleware ��� ����������
-app.UseRequestLocalization();
-
 app.UseRouting();
 
+// ������ �������������� �� ����������� � ��������
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
+// ������������ ����� � ������������
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+    // ��������� ���
+    string[] roleNames = { "Admin", "Chef", "User" };
+    foreach (var roleName in roleNames)
+    {
+        if (!await roleManager.RoleExistsAsync(roleName))
+        {
+            await roleManager.CreateAsync(new IdentityRole(roleName));
+        }
+    }
+
+    // ��������� �������������
+    var adminEmail = "admin@restaurant.com";
+    var adminPassword = "Admin123!";
+    if (await userManager.FindByEmailAsync(adminEmail) == null)
+    {
+        var adminUser = new ApplicationUser
+        {
+            UserName = adminEmail,
+            Email = adminEmail,
+            FullName = "Admin User"
+        };
+        var result = await userManager.CreateAsync(adminUser, adminPassword);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(adminUser, "Admin");
+        }
+    }
+
+    // ��������� ���-������
+    var chefEmail = "chef@restaurant.com";
+    var chefPassword = "Chef123!";
+    if (await userManager.FindByEmailAsync(chefEmail) == null)
+    {
+        var chefUser = new ApplicationUser
+        {
+            UserName = chefEmail,
+            Email = chefEmail,
+            FullName = "Chef User"
+        };
+        var result = await userManager.CreateAsync(chefUser, chefPassword);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(chefUser, "Chef");
+        }
+    }
+
+    // ��������� ���������� ����������� ����� ���������, ���� �� ������ ���� ���
+}
+
 app.Run();
+
+// ==== Controllers\AccountController.cs ====
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using RestaurantDomain.Models;
+using RestaurantInfrastructure.Models;
+
+namespace RestaurantInfrastructure.Controllers
+{
+    [AllowAnonymous]
+    public class AccountController : Controller
+    {
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
+
+        public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
+        {
+            _userManager = userManager;
+            _signInManager = signInManager;
+        }
+
+        [HttpGet]
+        public IActionResult Register()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Register(RegisterViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                var user = new ApplicationUser
+                {
+                    UserName = model.Email,
+                    Email = model.Email,
+                    FullName = model.FullName
+                };
+                var result = await _userManager.CreateAsync(user, model.Password);
+                if (result.Succeeded)
+                {
+                    await _userManager.AddToRoleAsync(user, "User");
+                    await _signInManager.SignInAsync(user, isPersistent: false);
+                    return RedirectToAction("Index", "Home");
+                }
+                foreach (var error in result.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+            }
+            return View(model);
+        }
+
+        [HttpGet]
+        public IActionResult Login()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Login(LoginViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
+                if (result.Succeeded)
+                {
+                    return RedirectToAction("Index", "Home");
+                }
+                ModelState.AddModelError(string.Empty, "Неправильна спроба входу.");
+            }
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Logout()
+        {
+            await _signInManager.SignOutAsync();
+            return RedirectToAction("Index", "Home");
+        }
+    }
+}
 
 // ==== Controllers\CategoriesController.cs ====
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization; // Додаємо для авторизації
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -307,6 +435,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize] // Усі дії доступні лише авторизованим користувачам
     public class CategoriesController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -316,13 +445,13 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Categories
+        // GET: Categories (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
             return View(await _context.Categories.ToListAsync());
         }
 
-        // GET: Categories/Details/5
+        // GET: Categories/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -340,17 +469,17 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // GET: Categories/Create
+        // GET: Categories/Create (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public IActionResult Create()
         {
             return View();
         }
 
-        // POST: Categories/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        // POST: Categories/Create (лише для Admin)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create([Bind("Description,Id")] Category category)
         {
             if (ModelState.IsValid)
@@ -362,7 +491,8 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // GET: Categories/Edit/5
+        // GET: Categories/Edit/5 (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -378,11 +508,10 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // POST: Categories/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        // POST: Categories/Edit/5 (лише для Admin)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int id, [Bind("Description,Id")] Category category)
         {
             if (id != category.Id)
@@ -413,7 +542,8 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // GET: Categories/Delete/5
+        // GET: Categories/Delete/5 (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -431,9 +561,10 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // POST: Categories/Delete/5
+        // POST: Categories/Delete/5 (лише для Admin)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var category = await _context.Categories.FindAsync(id);
@@ -453,12 +584,12 @@ namespace RestaurantInfrastructure.Controllers
     }
 }
 
-
 // ==== Controllers\CooksController.cs ====
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -467,6 +598,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize]
     public class CooksController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -476,16 +608,16 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Cooks
+        // GET: Cooks (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
             var restaurantDbContext = _context.Cooks
                 .Include(c => c.Restaurant)
-                .Include(c => c.Dishes); // Додаємо Include для страв
+                .Include(c => c.Dishes);
             return View(await restaurantDbContext.ToListAsync());
         }
 
-        // GET: Cooks/Details/5
+        // GET: Cooks/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -504,19 +636,20 @@ namespace RestaurantInfrastructure.Controllers
             return View(cook);
         }
 
-        // GET: Cooks/Create
+        // GET: Cooks/Create (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public IActionResult Create()
         {
-            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);  // Дозволяємо null як вибране значення
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);
             return View();
         }
 
-        // POST: Cooks/Create
+        // POST: Cooks/Create (лише для Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
         {
-            
             ModelState.Remove("Surname");
             ModelState.Remove("Restaurant");
 
@@ -535,7 +668,9 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
             return View(cook);
         }
-        // GET: Cooks/Edit/5
+
+        // GET: Cooks/Edit/5 (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -558,9 +693,10 @@ namespace RestaurantInfrastructure.Controllers
             return View(cook);
         }
 
-        // POST: Cooks/Edit/5
+        // POST: Cooks/Edit/5 (лише для Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Edit(int id, [Bind("Id,Surname,DateOfBirth,RestaurantId")] Cook cook, int[] selectedDishes)
         {
             if (id != cook.Id)
@@ -571,7 +707,6 @@ namespace RestaurantInfrastructure.Controllers
             ModelState.Remove("Surname");
             ModelState.Remove("Restaurant");
 
-            // Перевірка унікальності прізвища (виключаємо поточного кухаря)
             if (await _context.Cooks.AnyAsync(c => c.Surname == cook.Surname && c.Id != cook.Id))
             {
                 ModelState.AddModelError("Surname", "Кухар з таким прізвищем уже існує.");
@@ -626,7 +761,9 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["Dishes"] = new MultiSelectList(_context.Dishes, "Id", "Name", selectedDishes);
             return View(cook);
         }
-        // GET: Cooks/Delete/5
+
+        // GET: Cooks/Delete/5 (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -636,7 +773,7 @@ namespace RestaurantInfrastructure.Controllers
 
             var cook = await _context.Cooks
                 .Include(c => c.Restaurant)
-                .Include(c => c.Dishes)  // Завантажуємо пов’язані страви
+                .Include(c => c.Dishes)
                 .FirstOrDefaultAsync(m => m.Id == id);
 
             if (cook == null)
@@ -646,28 +783,27 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(cook);
         }
-        // POST: Cooks/Delete/5
+
+        // POST: Cooks/Delete/5 (лише для Chef)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var cook = await _context.Cooks
-                .Include(c => c.Dishes)  // Завантажуємо пов’язані страви
+                .Include(c => c.Dishes)
                 .FirstOrDefaultAsync(c => c.Id == id);
 
             if (cook != null)
             {
-                // Очищаємо зв’язки зі стравами
                 cook.Dishes.Clear();
-
-                // Видаляємо кухаря
                 _context.Cooks.Remove(cook);
-
                 await _context.SaveChangesAsync();
             }
 
             return RedirectToAction(nameof(Index));
         }
+
         private bool CookExists(int id)
         {
             return _context.Cooks.Any(e => e.Id == id);
@@ -675,12 +811,12 @@ namespace RestaurantInfrastructure.Controllers
     }
 }
 
-
 // ==== Controllers\DishesController.cs ====
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -689,6 +825,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize]
     public class DishesController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -698,7 +835,7 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Dishes
+        // GET: Dishes (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
             if (_context == null)
@@ -713,7 +850,7 @@ namespace RestaurantInfrastructure.Controllers
                 .ToListAsync());
         }
 
-        // GET: Dishes/Details/5
+        // GET: Dishes/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -732,22 +869,23 @@ namespace RestaurantInfrastructure.Controllers
             return View(dish);
         }
 
-        // GET: Dishes/Create
+        // GET: Dishes/Create (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public IActionResult Create()
         {
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description");
             return View();
         }
 
-        // POST: Dishes/Create
+        // POST: Dishes/Create (лише для Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Create([Bind("Name,Price,Receipt,Calories,CategoryId,Id")] Dish dish)
         {
             ModelState.Remove("Name");
             ModelState.Remove("Category");
 
-            // Перевірка унікальності назви
             if (await _context.Dishes.AnyAsync(d => d.Name == dish.Name))
             {
                 ModelState.AddModelError("Name", "Страва з такою назвою вже існує.");
@@ -762,7 +900,9 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
             return View(dish);
         }
-        // GET: Dishes/Edit/5
+
+        // GET: Dishes/Edit/5 (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -772,8 +912,8 @@ namespace RestaurantInfrastructure.Controllers
 
             var dish = await _context.Dishes
                 .Include(d => d.Category)
-                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
-                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
+                .Include(d => d.Cooks)
+                .Include(d => d.Ingredients)
                 .FirstOrDefaultAsync(m => m.Id == id);
 
             if (dish == null)
@@ -781,21 +921,16 @@ namespace RestaurantInfrastructure.Controllers
                 return NotFound();
             }
 
-            // Передаємо список категорій для вибору
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
-
-            // Передаємо список інгредієнтів для вибору (MultiSelectList)
             ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", dish.Ingredients.Select(i => i.Id));
-
-            // Передаємо список кухарів для вибору (MultiSelectList)
             ViewData["Cooks"] = new MultiSelectList(_context.Cooks, "Id", "Surname", dish.Cooks.Select(c => c.Id));
-
             return View(dish);
         }
-        // POST: Dishes/Edit/5
-        // POST: Dishes/Edit/5
+
+        // POST: Dishes/Edit/5 (лише для Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Edit(int id, [Bind("Id,Name,Price,Receipt,Calories,CategoryId")] Dish dish, int[] selectedIngredients, int[] selectedCooks)
         {
             if (id != dish.Id)
@@ -808,7 +943,6 @@ namespace RestaurantInfrastructure.Controllers
             {
                 try
                 {
-                    // Завантажуємо страву з пов’язаними інгредієнтами та кухарями
                     var dishToUpdate = await _context.Dishes
                         .Include(d => d.Ingredients)
                         .Include(d => d.Cooks)
@@ -819,15 +953,13 @@ namespace RestaurantInfrastructure.Controllers
                         return NotFound();
                     }
 
-                    // Оновлюємо основні поля страви
                     dishToUpdate.Name = dish.Name;
                     dishToUpdate.Price = dish.Price;
                     dishToUpdate.Receipt = dish.Receipt;
                     dishToUpdate.Calories = dish.Calories;
                     dishToUpdate.CategoryId = dish.CategoryId;
 
-                    // Оновлюємо інгредієнти
-                    dishToUpdate.Ingredients.Clear();  // Очищаємо поточні інгредієнти
+                    dishToUpdate.Ingredients.Clear();
                     if (selectedIngredients != null)
                     {
                         var ingredientsToAdd = await _context.Ingredients
@@ -839,8 +971,7 @@ namespace RestaurantInfrastructure.Controllers
                         }
                     }
 
-                    // Оновлюємо кухарів
-                    dishToUpdate.Cooks.Clear();  // Очищаємо поточних кухарів
+                    dishToUpdate.Cooks.Clear();
                     if (selectedCooks != null)
                     {
                         var cooksToAdd = await _context.Cooks
@@ -868,13 +999,14 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Якщо валідація не пройшла, повертаємо форму з даними
             ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Description", dish.CategoryId);
             ViewData["Ingredients"] = new MultiSelectList(_context.Ingredients, "Id", "Name", selectedIngredients);
             ViewData["Cooks"] = new MultiSelectList(_context.Cooks, "Id", "Surname", selectedCooks);
             return View(dish);
         }
-        // GET: Dishes/Delete/5
+
+        // GET: Dishes/Delete/5 (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -884,8 +1016,8 @@ namespace RestaurantInfrastructure.Controllers
 
             var dish = await _context.Dishes
                 .Include(d => d.Category)
-                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
-                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
+                .Include(d => d.Cooks)
+                .Include(d => d.Ingredients)
                 .FirstOrDefaultAsync(m => m.Id == id);
 
             if (dish == null)
@@ -895,33 +1027,29 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(dish);
         }
-        // POST: Dishes/Delete/5
-        // POST: Dishes/Delete/5
+
+        // POST: Dishes/Delete/5 (лише для Chef)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var dish = await _context.Dishes
-                .Include(d => d.Cooks)        // Завантажуємо пов’язаних кухарів
-                .Include(d => d.Ingredients)  // Завантажуємо пов’язані інгредієнти
+                .Include(d => d.Cooks)
+                .Include(d => d.Ingredients)
                 .FirstOrDefaultAsync(d => d.Id == id);
 
             if (dish != null)
             {
-                // Очищаємо зв’язки з кухарями
                 dish.Cooks.Clear();
-
-                // Очищаємо зв’язки з інгредієнтами
                 dish.Ingredients.Clear();
-
-                // Видаляємо страву
                 _context.Dishes.Remove(dish);
-
                 await _context.SaveChangesAsync();
             }
 
             return RedirectToAction(nameof(Index));
         }
+
         private bool DishExists(int id)
         {
             return _context.Dishes.Any(e => e.Id == id);
@@ -930,6 +1058,7 @@ namespace RestaurantInfrastructure.Controllers
 }
 
 // ==== Controllers\HomeController.cs ====
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RestaurantInfrastructure;
@@ -950,9 +1079,9 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
+        [AllowAnonymous] // ���������� ������ ��� ���
         public IActionResult Index()
         {
-            // ���� ��� ������� ������� (������� ����� �� ����������)
             var dishCategories = _context.Dishes
                 .Include(d => d.Category)
                 .GroupBy(d => d.Category.Description)
@@ -962,7 +1091,6 @@ namespace RestaurantInfrastructure.Controllers
             var pieChartLabels = dishCategories.Select(c => c.Category).ToArray();
             var pieChartData = dishCategories.Select(c => c.Count).ToArray();
 
-            // ���� ��� ����������� ������� (������� ������ � ����������)
             var cookRestaurants = _context.Cooks
                 .Include(c => c.Restaurant)
                 .GroupBy(c => c.Restaurant.Name)
@@ -972,7 +1100,6 @@ namespace RestaurantInfrastructure.Controllers
             var barChartLabels = cookRestaurants.Select(r => r.Restaurant).ToArray();
             var barChartData = cookRestaurants.Select(r => r.Count).ToArray();
 
-            // �������� ���� � ViewBag
             ViewBag.PieChartLabels = pieChartLabels;
             ViewBag.PieChartData = pieChartData;
             ViewBag.BarChartLabels = barChartLabels;
@@ -981,6 +1108,7 @@ namespace RestaurantInfrastructure.Controllers
             return View();
         }
 
+        [Authorize] // ���� 䳿 �������� ���� ������������� ������������
         public IActionResult Privacy()
         {
             return View();
@@ -999,6 +1127,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -1007,6 +1136,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize]
     public class IngredientsController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -1016,23 +1146,13 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Ingredients
+        //(GET: Ingredients (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
-            if (_context == null || _context.Ingredients == null)
-            {
-                return Problem("Entity set 'RestaurantDbContext.Ingredients' is null.");
-            }
-
-            // Завантажуємо інгредієнти разом із пов’язаними стравами
-            var ingredients = await _context.Ingredients
-                .Include(i => i.Dishes) // Додаємо Include для завантаження страв
-                .ToListAsync();
-
-            return View(ingredients);
+            return View(await _context.Ingredients.ToListAsync());
         }
 
-        // GET: Ingredients/Details/5
+        // GET: Ingredients/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -1041,7 +1161,6 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
-                .Include(i => i.Dishes) // Завантажуємо страви для деталей
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (ingredient == null)
             {
@@ -1051,25 +1170,19 @@ namespace RestaurantInfrastructure.Controllers
             return View(ingredient);
         }
 
-        // GET: Ingredients/Create
+        // GET: Ingredients/Create (доступно для Admin і Chef)
+        [Authorize(Roles = "Admin,Chef")]
         public IActionResult Create()
         {
             return View();
         }
 
-        // POST: Ingredients/Create
+        // POST: Ingredients/Create (доступно для Admin і Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
+        [Authorize(Roles = "Admin,Chef")]
+        public async Task<IActionResult> Create([Bind("Id,Name,WeightMeasure")] Ingredient ingredient)
         {
-            ModelState.Remove("Name");
-
-            // Перевірка унікальності назви
-            if (await _context.Ingredients.AnyAsync(i => i.Name == ingredient.Name))
-            {
-                ModelState.AddModelError("Name", "Інгредієнт з такою назвою вже існує.");
-            }
-
             if (ModelState.IsValid)
             {
                 _context.Add(ingredient);
@@ -1078,7 +1191,9 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(ingredient);
         }
-        // GET: Ingredients/Edit/5
+
+        // GET: Ingredients/Edit/5 (доступно для Admin і Chef)
+        [Authorize(Roles = "Admin,Chef")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -1094,22 +1209,15 @@ namespace RestaurantInfrastructure.Controllers
             return View(ingredient);
         }
 
-        // POST: Ingredients/Edit/5
+        // POST: Ingredients/Edit/5 (доступно для Admin і Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Name,WeightMeasure,Calories,Id")] Ingredient ingredient)
+        [Authorize(Roles = "Admin,Chef")]
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,WeightMeasure")] Ingredient ingredient)
         {
             if (id != ingredient.Id)
             {
                 return NotFound();
-            }
-
-            ModelState.Remove("Name");
-
-            // Перевірка унікальності назви (виключаємо поточний інгредієнт)
-            if (await _context.Ingredients.AnyAsync(i => i.Name == ingredient.Name && i.Id != ingredient.Id))
-            {
-                ModelState.AddModelError("Name", "Інгредієнт з такою назвою вже існує.");
             }
 
             if (ModelState.IsValid)
@@ -1135,8 +1243,8 @@ namespace RestaurantInfrastructure.Controllers
             return View(ingredient);
         }
 
-        // GET: Ingredients/Delete/5
-        // GET: Ingredients/Delete/5
+        // GET: Ingredients/Delete/5 (доступно для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -1145,9 +1253,7 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var ingredient = await _context.Ingredients
-                .Include(i => i.Dishes)  // Завантажуємо страви для деталей
                 .FirstOrDefaultAsync(m => m.Id == id);
-
             if (ingredient == null)
             {
                 return NotFound();
@@ -1155,26 +1261,20 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(ingredient);
         }
-        // POST: Ingredients/Delete/5
+
+        // POST: Ingredients/Delete/5 (доступно для Admin)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var ingredient = await _context.Ingredients
-                .Include(i => i.Dishes)  // Завантажуємо пов’язані страви
-                .FirstOrDefaultAsync(i => i.Id == id);
-
+            var ingredient = await _context.Ingredients.FindAsync(id);
             if (ingredient != null)
             {
-                // Очищаємо зв’язки зі стравами
-                ingredient.Dishes.Clear();
-
-                // Видаляємо інгредієнт
                 _context.Ingredients.Remove(ingredient);
-
-                await _context.SaveChangesAsync();
             }
 
+            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
@@ -1186,12 +1286,14 @@ namespace RestaurantInfrastructure.Controllers
 }
 
 // ==== Controllers\ReportsController.cs ====
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RestaurantInfrastructure;
 using System.Threading.Tasks;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize(Roles = "Admin")]
     public class ReportsController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -1214,7 +1316,6 @@ namespace RestaurantInfrastructure.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Export()
         {
-            // Отримуємо вибір користувача
             bool exportCategories = Request.Form["exportCategories"] == "on";
             bool exportCooks = Request.Form["exportCooks"] == "on";
             bool exportDishes = Request.Form["exportDishes"] == "on";
@@ -1227,7 +1328,6 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction("Index");
             }
 
-            // Викликаємо експорт
             var stream = await _exportHelper.ExportToExcelAsync(_context, exportCategories, exportCooks, exportDishes, exportIngredients, exportRestaurants);
             return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "RestaurantData.xlsx");
         }
@@ -1242,7 +1342,6 @@ namespace RestaurantInfrastructure.Controllers
                 return RedirectToAction("Index");
             }
 
-            // Викликаємо імпорт
             var (success, errors) = await _importHelper.ImportFromExcelAsync(importFile);
             if (!success && errors.Any())
             {
@@ -1261,6 +1360,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -1269,6 +1369,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize]
     public class RestaurantsController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -1278,13 +1379,13 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Restaurants
+        // GET: Restaurants (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
             return View(await _context.Restaurants.ToListAsync());
         }
 
-        // GET: Restaurants/Details/5
+        // GET: Restaurants/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -1302,30 +1403,31 @@ namespace RestaurantInfrastructure.Controllers
             return View(restaurant);
         }
 
-        // GET: Restaurants/Create
-        // GET: Cooks/Create
+        // GET: Restaurants/Create (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public IActionResult Create()
         {
-            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);  // Дозволяємо null
             return View();
         }
 
-        // POST: Cooks/Create
+        // POST: Restaurants/Create (лише для Admin)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Create([Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
         {
             ModelState.Remove("Name");
             if (ModelState.IsValid)
             {
-                _context.Add(cook);
+                _context.Add(restaurant);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
-            return View(cook);
+            return View(restaurant);
         }
-        // GET: Restaurants/Edit/5
+
+        // GET: Restaurants/Edit/5 (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -1341,9 +1443,10 @@ namespace RestaurantInfrastructure.Controllers
             return View(restaurant);
         }
 
-        // POST: Restaurants/Edit/5
+        // POST: Restaurants/Edit/5 (лише для Admin)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int id, [Bind("Name,Contacts,Reviews,Id")] Restaurant restaurant)
         {
             if (id != restaurant.Id)
@@ -1373,8 +1476,9 @@ namespace RestaurantInfrastructure.Controllers
             }
             return View(restaurant);
         }
-        // GET: Restaurants/Delete/5
-        // GET: Restaurants/Delete/5
+
+        // GET: Restaurants/Delete/5 (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -1383,7 +1487,7 @@ namespace RestaurantInfrastructure.Controllers
             }
 
             var restaurant = await _context.Restaurants
-                .Include(r => r.Cooks)  // Завантажуємо пов’язаних кухарів
+                .Include(r => r.Cooks)
                 .FirstOrDefaultAsync(m => m.Id == id);
 
             if (restaurant == null)
@@ -1393,32 +1497,113 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(restaurant);
         }
-        // POST: Restaurants/Delete/5
+
+        // POST: Restaurants/Delete/5 (лише для Admin)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var restaurant = await _context.Restaurants
-                .Include(r => r.Cooks)  // Завантажуємо пов’язаних кухарів
+                .Include(r => r.Cooks)
                 .FirstOrDefaultAsync(r => r.Id == id);
 
             if (restaurant != null)
             {
-                // Очищаємо колекцію Cooks у ресторані
                 restaurant.Cooks.Clear();
-
-                // Видаляємо ресторан
                 _context.Restaurants.Remove(restaurant);
-
                 await _context.SaveChangesAsync();
             }
 
             return RedirectToAction(nameof(Index));
         }
+
+        // GET: Restaurants/AddReview/5 (доступно для User)
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult> AddReview(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var restaurant = await _context.Restaurants.FindAsync(id);
+            if (restaurant == null)
+            {
+                return NotFound();
+            }
+
+            return View(restaurant);
+        }
+
+        // POST: Restaurants/AddReview/5 (доступно для User)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult> AddReview(int id, string review)
+        {
+            var restaurant = await _context.Restaurants.FindAsync(id);
+            if (restaurant == null)
+            {
+                return NotFound();
+            }
+
+            if (string.IsNullOrEmpty(review))
+            {
+                ModelState.AddModelError("Reviews", "Відгук не може бути порожнім.");
+                return View(restaurant);
+            }
+
+            if (restaurant.Reviews == null)
+            {
+                restaurant.Reviews = review;
+            }
+            else
+            {
+                restaurant.Reviews += "\n" + review;
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
         private bool RestaurantExists(int id)
         {
             return _context.Restaurants.Any(e => e.Id == id);
         }
+    }
+}
+
+// ==== Models\AccountViewModels.cs ====
+using System.ComponentModel.DataAnnotations;
+
+namespace RestaurantInfrastructure.Models
+{
+    public class RegisterViewModel
+    {
+        [Required(ErrorMessage = "Електронна пошта є обов'язковою.")]
+        [EmailAddress(ErrorMessage = "Неправильний формат електронної пошти.")]
+        public string? Email { get; set; }
+
+        [Required(ErrorMessage = "Пароль є обов'язковим.")]
+        [DataType(DataType.Password)]
+        public string? Password { get; set; }
+
+        [Required(ErrorMessage = "Ім'я є обов'язковим.")]
+        public string? FullName { get; set; }
+    }
+
+    public class LoginViewModel
+    {
+        [Required(ErrorMessage = "Електронна пошта є обов'язковою.")]
+        [EmailAddress(ErrorMessage = "Неправильний формат електронної пошти.")]
+        public string? Email { get; set; }
+
+        [Required(ErrorMessage = "Пароль є обов'язковим.")]
+        [DataType(DataType.Password)]
+        public string? Password { get; set; }
+
+        public bool RememberMe { get; set; }
     }
 }
 
@@ -1445,6 +1630,94 @@ namespace RestaurantInfrastructure.Models
     Layout = "_Layout";
 }
 
+
+// ==== Views\Account\Login.cshtml ====
+@model RestaurantInfrastructure.Models.LoginViewModel
+
+@{
+    ViewData["Title"] = "Вхід";
+}
+
+<h1>Вхід</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Login" method="post">
+            <div asp-validation-summary="All" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Email" class="control-label"></label>
+                <input asp-for="Email" class="form-control" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Password" class="control-label"></label>
+                <input asp-for="Password" class="form-control" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <div class="checkbox">
+                    <label>
+                        <input asp-for="RememberMe" /> @Html.DisplayNameFor(model => model.RememberMe)
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Увійти" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-controller="Home" asp-action="Index">Повернутися на головну</a>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+
+// ==== Views\Account\Register.cshtml ====
+@model RestaurantInfrastructure.Models.RegisterViewModel
+
+@{
+    ViewData["Title"] = "Реєстрація";
+}
+
+<h1>Реєстрація</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Register" method="post">
+            <div asp-validation-summary="All" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="FullName" class="control-label"></label>
+                <input asp-for="FullName" class="form-control" />
+                <span asp-validation-for="FullName" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Email" class="control-label"></label>
+                <input asp-for="Email" class="form-control" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Password" class="control-label"></label>
+                <input asp-for="Password" class="form-control" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Зареєструватися" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-controller="Home" asp-action="Index">Повернутися на головну</a>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
 
 // ==== Views\Categories\Create.cshtml ====
 @model RestaurantDomain.Models.Category
@@ -1589,9 +1862,12 @@ namespace RestaurantInfrastructure.Models
 
 <h1>Категорії</h1>
 
-<p>
-    <a asp-action="Create" class="btn btn-primary">Додати нову категорію</a>
-</p>
+@if (User.IsInRole("Admin"))
+{
+    <p>
+        <a asp-action="Create" class="btn btn-primary">Додати нову категорію</a>
+    </p>
+}
 <table class="table">
     <thead>
         <tr>
@@ -1609,9 +1885,15 @@ namespace RestaurantInfrastructure.Models
                     @Html.DisplayFor(modelItem => item.Description)
                 </td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> <span>|</span>
+                    }
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <span>|</span> <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    }
                 </td>
             </tr>
         }
@@ -1827,9 +2109,12 @@ namespace RestaurantInfrastructure.Models
 
 <h1>Кухарі</h1>
 
-<p>
-    <a asp-action="Create" class="btn btn-primary">Додати нового кухаря</a>
-</p>
+@if (User.IsInRole("Chef"))
+{
+    <p>
+        <a asp-action="Create" class="btn btn-primary">Додати нового кухаря</a>
+    </p>
+}
 <table class="table">
     <thead>
         <tr>
@@ -1877,9 +2162,15 @@ namespace RestaurantInfrastructure.Models
                     }
                 </td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    @if (User.IsInRole("Chef"))
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> <span>|</span>
+                    }
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a>
+                    @if (User.IsInRole("Chef"))
+                    {
+                        <span>|</span> <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    }
                 </td>
             </tr>
         }
@@ -2122,9 +2413,12 @@ namespace RestaurantInfrastructure.Models
 
 <h1>Страви</h1>
 
-<p>
-    <a asp-action="Create" class="btn btn-primary">Додати нову страву</a>
-</p>
+@if (User.IsInRole("Chef"))
+{
+    <p>
+        <a asp-action="Create" class="btn btn-primary">Додати нову страву</a>
+    </p>
+}
 <table class="table">
     <thead>
         <tr>
@@ -2192,7 +2486,7 @@ namespace RestaurantInfrastructure.Models
                         <ul>
                             @foreach (var ingredient in item.Ingredients)
                             {
-                                <li>@ingredient.Name</li> <!-- Замінюємо WeightMeasure і Calories на Name -->
+                                <li>@ingredient.Name</li>
                             }
                         </ul>
                     }
@@ -2202,15 +2496,20 @@ namespace RestaurantInfrastructure.Models
                     }
                 </td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    @if (User.IsInRole("Chef"))
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> <span>|</span>
+                    }
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a>
+                    @if (User.IsInRole("Chef"))
+                    {
+                        <span>|</span> <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    }
                 </td>
             </tr>
         }
     </tbody>
 </table>
-
 
 // ==== Views\Home\Index.cshtml ====
 @{
@@ -2550,9 +2849,12 @@ namespace RestaurantInfrastructure.Models
 
 <h1>Інгредієнти</h1>
 
-<p>
-    <a asp-action="Create" class="btn btn-primary">Додати новий інгредієнт</a>
-</p>
+@if (User.IsInRole("Admin") || User.IsInRole("Chef"))
+{
+    <p>
+        <a asp-action="Create" class="btn btn-primary">Додати новий інгредієнт</a>
+    </p>
+}
 <table class="table">
     <thead>
         <tr>
@@ -2600,9 +2902,15 @@ namespace RestaurantInfrastructure.Models
                     }
                 </td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    @if (User.IsInRole("Admin") || User.IsInRole("Chef"))
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> <span>|</span>
+                    }
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <span>|</span> <a asp-action="Delete" asp-route-id="@ LEGAL
+                    }
                 </td>
             </tr>
         }
@@ -2668,6 +2976,44 @@ namespace RestaurantInfrastructure.Models
     </div>
     <button type="submit" class="btn btn-primary mt-2">Імпортувати</button>
 </form>
+
+// ==== Views\Restaurants\AddReview.cshtml ====
+@model RestaurantDomain.Models.Restaurant
+
+@{
+    ViewData["Title"] = "Додати відгук";
+}
+
+<h1>Додати відгук</h1>
+
+<h4>Ресторан: @Model.Name</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="AddReview">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <label class="control-label">Відгук</label>
+                <textarea name="review" class="form-control" placeholder="Введіть ваш відгук"></textarea>
+                <span asp-validation-for="Reviews" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Додати відгук" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Повернутися до списку</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
 
 // ==== Views\Restaurants\Create.cshtml ====
 @model RestaurantDomain.Models.Restaurant
@@ -2805,12 +3151,26 @@ namespace RestaurantInfrastructure.Models
             @Html.DisplayNameFor(model => model.Reviews)
         </dt>
         <dd class="col-sm-10">
-            @Html.DisplayFor(model => model.Reviews)
+            @if (string.IsNullOrEmpty(Model.Reviews))
+            {
+                <span>Немає відгуків.</span>
+            }
+            else
+            {
+                @Html.DisplayFor(model => model.Reviews)
+            }
         </dd>
     </dl>
 </div>
 <div>
-    <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
+    @if (User.IsInRole("Admin"))
+    {
+        <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> <span>|</span>
+    }
+    @if (User.IsInRole("User"))
+    {
+        <a asp-action="AddReview" asp-route-id="@Model?.Id">Додати відгук</a> <span>|</span>
+    }
     <a asp-action="Index">Повернутися до списку</a>
 </div>
 
@@ -2872,7 +3232,10 @@ namespace RestaurantInfrastructure.Models
 <h1>Ресторани</h1>
 
 <p>
-    <a asp-action="Create" class="btn btn-primary">Додати новий ресторан</a>
+    @if (User.IsInRole("Admin"))
+    {
+        <a asp-action="Create" class="btn btn-primary">Додати новий ресторан</a>
+    }
 </p>
 <table class="table">
     <thead>
@@ -2900,18 +3263,34 @@ namespace RestaurantInfrastructure.Models
                     @Html.DisplayFor(modelItem => item.Contacts)
                 </td>
                 <td>
-                    @Html.DisplayFor(modelItem => item.Reviews)
+                    @if (string.IsNullOrEmpty(item.Reviews))
+                    {
+                        <span>Немає відгуків.</span>
+                    }
+                    else
+                    {
+                        @Html.DisplayFor(modelItem => item.Reviews)
+                    }
                 </td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> <span>|</span>
+                    }
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> <span>|</span>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a> <span>|</span>
+                    }
+                    @if (User.IsInRole("User"))
+                    {
+                        <a asp-action="AddReview" asp-route-id="@item.Id">Додати відгук</a>
+                    }
                 </td>
             </tr>
         }
     </tbody>
 </table>
-
 
 // ==== Views\Shared\Error.cshtml ====
 @model ErrorViewModel
@@ -2941,23 +3320,20 @@ namespace RestaurantInfrastructure.Models
 </p>
 
 // ==== Views\Shared\_Layout.cshtml ====
-<!-- Views/Shared/_Layout.cshtml -->
 <!DOCTYPE html>
 <html lang="uk">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Сом Валера</title>
-    <script type="importmap"></script>
+    <title>@ViewData["Title"] - RestaurantInfrastructure</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/RestaurantInfrastructure.styles.css" asp-append-version="true" />
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-3">
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Сом Валера</a>
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">RestaurantInfrastructure</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
@@ -2967,28 +3343,29 @@ namespace RestaurantInfrastructure.Models
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Головна</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Restaurants" asp-action="Index">Ресторани</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Cooks" asp-action="Index">Кухарі</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Dishes" asp-action="Index">Страви</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Categories" asp-action="Index">Категорії</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Ingredients" asp-action="Index">Інгредієнти</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Reports" asp-action="Index">Звіти</a> <!-- Додаємо посилання на Звіти -->
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Конфіденційність</a>
-                        </li>
+                        @if (User.Identity.IsAuthenticated)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Restaurants" asp-action="Index">Ресторани</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Dishes" asp-action="Index">Страви</a>
+                            </li>
+                        }
+                        @if (User.IsInRole("Admin") || User.IsInRole("Chef"))
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Categories" asp-action="Index">Категорії</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Ingredients" asp-action="Index">Інгредієнти</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Cooks" asp-action="Index">Кухарі</a>
+                            </li>
+                        }
                     </ul>
+                    <partial name="_LoginPartial" />
                 </div>
             </div>
         </nav>
@@ -3001,7 +3378,7 @@ namespace RestaurantInfrastructure.Models
 
     <footer class="border-top footer text-muted">
         <div class="container">
-            © 2025 - Сом Валера - <a asp-area="" asp-controller="Home" asp-action="Privacy">Конфіденційність</a>
+            &copy; 2025 - RestaurantInfrastructure - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
         </div>
     </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
@@ -3062,14 +3439,37 @@ button.accept-policy {
 }
 
 
+// ==== Views\Shared\_LoginPartial.cshtml ====
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<RestaurantDomain.Models.ApplicationUser> SignInManager
+@inject UserManager<RestaurantDomain.Models.ApplicationUser> UserManager
+
+<ul class="navbar-nav ms-auto">
+    @if (SignInManager.IsSignedIn(User))
+    {
+        <li class="nav-item">
+            <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="nav-link text-dark btn btn-link" style="border: none; background: none; padding: 0;">
+                    Вийти (@UserManager.GetUserName(User))
+                </button>
+            </form>
+        </li>
+    }
+    else
+    {
+        <li class="nav-item">
+            <a class="nav-link text-dark" asp-area="" asp-controller="Account" asp-action="Register">Реєстрація</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" asp-area="" asp-controller="Account" asp-action="Login">Вхід</a>
+        </li>
+    }
+</ul>
+
 // ==== Views\Shared\_ValidationScriptsPartial.cshtml ====
 <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
-<script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js"></script>
-
-
-
-
-
+<script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
 
 // ==== wwwroot\css\site.css ====
 html {

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize]
     public class CooksController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -19,16 +21,16 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Cooks
+        // GET: Cooks (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
             var restaurantDbContext = _context.Cooks
                 .Include(c => c.Restaurant)
-                .Include(c => c.Dishes); // Додаємо Include для страв
+                .Include(c => c.Dishes);
             return View(await restaurantDbContext.ToListAsync());
         }
 
-        // GET: Cooks/Details/5
+        // GET: Cooks/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -47,19 +49,20 @@ namespace RestaurantInfrastructure.Controllers
             return View(cook);
         }
 
-        // GET: Cooks/Create
+        // GET: Cooks/Create (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public IActionResult Create()
         {
-            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);  // Дозволяємо null як вибране значення
+            ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);
             return View();
         }
 
-        // POST: Cooks/Create
+        // POST: Cooks/Create (лише для Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
         {
-            
             ModelState.Remove("Surname");
             ModelState.Remove("Restaurant");
 
@@ -78,7 +81,9 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", cook.RestaurantId);
             return View(cook);
         }
-        // GET: Cooks/Edit/5
+
+        // GET: Cooks/Edit/5 (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -101,9 +106,10 @@ namespace RestaurantInfrastructure.Controllers
             return View(cook);
         }
 
-        // POST: Cooks/Edit/5
+        // POST: Cooks/Edit/5 (лише для Chef)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Edit(int id, [Bind("Id,Surname,DateOfBirth,RestaurantId")] Cook cook, int[] selectedDishes)
         {
             if (id != cook.Id)
@@ -114,7 +120,6 @@ namespace RestaurantInfrastructure.Controllers
             ModelState.Remove("Surname");
             ModelState.Remove("Restaurant");
 
-            // Перевірка унікальності прізвища (виключаємо поточного кухаря)
             if (await _context.Cooks.AnyAsync(c => c.Surname == cook.Surname && c.Id != cook.Id))
             {
                 ModelState.AddModelError("Surname", "Кухар з таким прізвищем уже існує.");
@@ -169,7 +174,9 @@ namespace RestaurantInfrastructure.Controllers
             ViewData["Dishes"] = new MultiSelectList(_context.Dishes, "Id", "Name", selectedDishes);
             return View(cook);
         }
-        // GET: Cooks/Delete/5
+
+        // GET: Cooks/Delete/5 (лише для Chef)
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -179,7 +186,7 @@ namespace RestaurantInfrastructure.Controllers
 
             var cook = await _context.Cooks
                 .Include(c => c.Restaurant)
-                .Include(c => c.Dishes)  // Завантажуємо пов’язані страви
+                .Include(c => c.Dishes)
                 .FirstOrDefaultAsync(m => m.Id == id);
 
             if (cook == null)
@@ -189,28 +196,27 @@ namespace RestaurantInfrastructure.Controllers
 
             return View(cook);
         }
-        // POST: Cooks/Delete/5
+
+        // POST: Cooks/Delete/5 (лише для Chef)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Chef")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var cook = await _context.Cooks
-                .Include(c => c.Dishes)  // Завантажуємо пов’язані страви
+                .Include(c => c.Dishes)
                 .FirstOrDefaultAsync(c => c.Id == id);
 
             if (cook != null)
             {
-                // Очищаємо зв’язки зі стравами
                 cook.Dishes.Clear();
-
-                // Видаляємо кухаря
                 _context.Cooks.Remove(cook);
-
                 await _context.SaveChangesAsync();
             }
 
             return RedirectToAction(nameof(Index));
         }
+
         private bool CookExists(int id)
         {
             return _context.Cooks.Any(e => e.Id == id);

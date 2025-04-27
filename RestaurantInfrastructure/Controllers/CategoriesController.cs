@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization; // Додаємо для авторизації
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ using RestaurantInfrastructure;
 
 namespace RestaurantInfrastructure.Controllers
 {
+    [Authorize] // Усі дії доступні лише авторизованим користувачам
     public class CategoriesController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -19,13 +21,13 @@ namespace RestaurantInfrastructure.Controllers
             _context = context;
         }
 
-        // GET: Categories
+        // GET: Categories (доступно для всіх авторизованих)
         public async Task<IActionResult> Index()
         {
             return View(await _context.Categories.ToListAsync());
         }
 
-        // GET: Categories/Details/5
+        // GET: Categories/Details/5 (доступно для всіх авторизованих)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -43,17 +45,17 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // GET: Categories/Create
+        // GET: Categories/Create (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public IActionResult Create()
         {
             return View();
         }
 
-        // POST: Categories/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        // POST: Categories/Create (лише для Admin)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create([Bind("Description,Id")] Category category)
         {
             if (ModelState.IsValid)
@@ -65,7 +67,8 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // GET: Categories/Edit/5
+        // GET: Categories/Edit/5 (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -81,11 +84,10 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // POST: Categories/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        // POST: Categories/Edit/5 (лише для Admin)
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int id, [Bind("Description,Id")] Category category)
         {
             if (id != category.Id)
@@ -116,7 +118,8 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // GET: Categories/Delete/5
+        // GET: Categories/Delete/5 (лише для Admin)
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -134,9 +137,10 @@ namespace RestaurantInfrastructure.Controllers
             return View(category);
         }
 
-        // POST: Categories/Delete/5
+        // POST: Categories/Delete/5 (лише для Admin)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var category = await _context.Categories.FindAsync(id);

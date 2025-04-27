@@ -23,7 +23,7 @@ builder.Services.AddControllersWithViews();
 
 var app = builder.Build();
 
-// Налаштування конвеєра обробки запитів
+// Налаштування обробки помилок
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
@@ -35,7 +35,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-// Додаємо автентифікацію та авторизацію в конвеєр
+// Додаємо автентифікацію та авторизацію в пайплайн
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -43,14 +43,14 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// Ініціалізація ролей і адміністратора
+// Налаштування ролей і користувачів
 using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-    // Створення ролей
-    string[] roleNames = { "Admin", "User" };
+    // Створюємо ролі
+    string[] roleNames = { "Admin", "Chef", "User" };
     foreach (var roleName in roleNames)
     {
         if (!await roleManager.RoleExistsAsync(roleName))
@@ -59,7 +59,7 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    // Створення адміністратора
+    // Створюємо адміністратора
     var adminEmail = "admin@restaurant.com";
     var adminPassword = "Admin123!";
     if (await userManager.FindByEmailAsync(adminEmail) == null)
@@ -76,6 +76,26 @@ using (var scope = app.Services.CreateScope())
             await userManager.AddToRoleAsync(adminUser, "Admin");
         }
     }
+
+    // Створюємо шеф-кухаря
+    var chefEmail = "chef@restaurant.com";
+    var chefPassword = "Chef123!";
+    if (await userManager.FindByEmailAsync(chefEmail) == null)
+    {
+        var chefUser = new ApplicationUser
+        {
+            UserName = chefEmail,
+            Email = chefEmail,
+            FullName = "Chef User"
+        };
+        var result = await userManager.CreateAsync(chefUser, chefPassword);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(chefUser, "Chef");
+        }
+    }
+
+    // Звичайний користувач створюється через реєстрацію, тому не додаємо його тут
 }
 
 app.Run();

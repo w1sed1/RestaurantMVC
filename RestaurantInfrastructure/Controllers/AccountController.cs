@@ -1,5 +1,4 @@
-﻿// RestaurantInfrastructure/Controllers/AccountController.cs
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestaurantDomain.Models;

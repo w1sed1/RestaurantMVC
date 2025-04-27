@@ -6,9 +6,12 @@
 
 <h1>Страви</h1>
 
-<p>
-    <a asp-action="Create" class="btn btn-primary">Додати нову страву</a>
-</p>
+@if (User.IsInRole("Chef"))
+{
+    <p>
+        <a asp-action="Create" class="btn btn-primary">Додати нову страву</a>
+    </p>
+}
 <table class="table">
     <thead>
         <tr>
@@ -76,7 +79,7 @@
                         <ul>
                             @foreach (var ingredient in item.Ingredients)
                             {
-                                <li>@ingredient.Name</li> <!-- Замінюємо WeightMeasure і Calories на Name -->
+                                <li>@ingredient.Name</li>
                             }
                         </ul>
                     }
@@ -86,9 +89,15 @@
                     }
                 </td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    @if (User.IsInRole("Chef"))
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> <span>|</span>
+                    }
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a>
+                    @if (User.IsInRole("Chef"))
+                    {
+                        <span>|</span> <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    }
                 </td>
             </tr>
         }

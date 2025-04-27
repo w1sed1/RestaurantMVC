@@ -6,7 +6,12 @@
     @if (SignInManager.IsSignedIn(User))
     {
         <li class="nav-item">
-            <a class="nav-link text-dark" asp-area="" asp-controller="Account" asp-action="Logout">Вийти (@UserManager.GetUserName(User))</a>
+            <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="nav-link text-dark btn btn-link" style="border: none; background: none; padding: 0;">
+                    Вийти (@UserManager.GetUserName(User))
+                </button>
+            </form>
         </li>
     }
     else

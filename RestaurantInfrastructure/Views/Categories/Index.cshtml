@@ -6,9 +6,12 @@
 
 <h1>Категорії</h1>
 
-<p>
-    <a asp-action="Create" class="btn btn-primary">Додати нову категорію</a>
-</p>
+@if (User.IsInRole("Admin"))
+{
+    <p>
+        <a asp-action="Create" class="btn btn-primary">Додати нову категорію</a>
+    </p>
+}
 <table class="table">
     <thead>
         <tr>
@@ -26,9 +29,15 @@
                     @Html.DisplayFor(modelItem => item.Description)
                 </td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> <span>|</span>
+                    }
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <span>|</span> <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
+                    }
                 </td>
             </tr>
         }
