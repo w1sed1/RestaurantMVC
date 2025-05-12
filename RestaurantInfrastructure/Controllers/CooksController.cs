@@ -51,6 +51,7 @@ namespace RestaurantInfrastructure.Controllers
 
         // GET: Cooks/Create (лише для Chef)
         [Authorize(Roles = "Chef")]
+        [Authorize(Roles = "Admin")]
         public IActionResult Create()
         {
             ViewData["RestaurantId"] = new SelectList(_context.Restaurants, "Id", "Name", null);
@@ -61,6 +62,7 @@ namespace RestaurantInfrastructure.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = "Chef")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create([Bind("RestaurantId,Surname,DateOfBirth,Id")] Cook cook)
         {
             ModelState.Remove("Surname");
@@ -87,6 +89,7 @@ namespace RestaurantInfrastructure.Controllers
 
         // GET: Cooks/Edit/5 (лише для Chef)
         [Authorize(Roles = "Chef")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -113,6 +116,7 @@ namespace RestaurantInfrastructure.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = "Chef")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int id, [Bind("Id,Surname,DateOfBirth,RestaurantId")] Cook cook, int[] selectedDishes)
         {
             if (id != cook.Id)
@@ -184,6 +188,7 @@ namespace RestaurantInfrastructure.Controllers
 
         // GET: Cooks/Delete/5 (лише для Chef)
         [Authorize(Roles = "Chef")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -208,6 +213,7 @@ namespace RestaurantInfrastructure.Controllers
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = "Chef")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var cook = await _context.Cooks

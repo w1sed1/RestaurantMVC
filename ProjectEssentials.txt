@@ -657,7 +657,10 @@ namespace RestaurantInfrastructure.Controllers
             {
                 ModelState.AddModelError("Surname", "Кухар з таким прізвищем уже існує.");
             }
-
+            if (!string.IsNullOrEmpty(cook.Surname))
+            {
+                cook.Surname = char.ToUpper(cook.Surname[0]) + cook.Surname.Substring(1).ToLower();
+            }
             if (ModelState.IsValid)
             {
                 _context.Add(cook);
@@ -710,6 +713,10 @@ namespace RestaurantInfrastructure.Controllers
             if (await _context.Cooks.AnyAsync(c => c.Surname == cook.Surname && c.Id != cook.Id))
             {
                 ModelState.AddModelError("Surname", "Кухар з таким прізвищем уже існує.");
+            }
+            if (!string.IsNullOrEmpty(cook.Surname))
+            {
+                cook.Surname = char.ToUpper(cook.Surname[0]) + cook.Surname.Substring(1).ToLower();
             }
 
             if (ModelState.IsValid)
@@ -1244,7 +1251,8 @@ namespace RestaurantInfrastructure.Controllers
         }
 
         // GET: Ingredients/Delete/5 (доступно для Admin)
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Chef")]
+
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -1265,7 +1273,8 @@ namespace RestaurantInfrastructure.Controllers
         // POST: Ingredients/Delete/5 (доступно для Admin)
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Chef")]
+
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var ingredient = await _context.Ingredients.FindAsync(id);
@@ -1583,26 +1592,31 @@ namespace RestaurantInfrastructure.Models
     {
         [Required(ErrorMessage = "Електронна пошта є обов'язковою.")]
         [EmailAddress(ErrorMessage = "Неправильний формат електронної пошти.")]
-        public string? Email { get; set; }
+        [Display(Name = "Електронна пошта")]
+        public string Email { get; set; }
 
         [Required(ErrorMessage = "Пароль є обов'язковим.")]
         [DataType(DataType.Password)]
-        public string? Password { get; set; }
+        [Display(Name = "Пароль")]
+        public string Password { get; set; }
 
         [Required(ErrorMessage = "Ім'я є обов'язковим.")]
-        public string? FullName { get; set; }
+        [Display(Name = "Повне ім'я")]
+        public string FullName { get; set; }
     }
 
     public class LoginViewModel
     {
         [Required(ErrorMessage = "Електронна пошта є обов'язковою.")]
         [EmailAddress(ErrorMessage = "Неправильний формат електронної пошти.")]
-        public string? Email { get; set; }
+        [Display(Name = "Електронна пошта")]
+        public string Email { get; set; }
 
         [Required(ErrorMessage = "Пароль є обов'язковим.")]
         [DataType(DataType.Password)]
-        public string? Password { get; set; }
-
+        [Display(Name = "Пароль")]
+        public string Password { get; set; }
+        [Display(Name = "Запам'ятати мене")]
         public bool RememberMe { get; set; }
     }
 }
@@ -2849,12 +2863,9 @@ namespace RestaurantInfrastructure.Models
 
 <h1>Інгредієнти</h1>
 
-@if (User.IsInRole("Admin") || User.IsInRole("Chef"))
-{
-    <p>
-        <a asp-action="Create" class="btn btn-primary">Додати новий інгредієнт</a>
-    </p>
-}
+<p>
+    <a asp-action="Create" class="btn btn-primary">Додати новий інгредієнт</a>
+</p>
 <table class="table">
     <thead>
         <tr>
@@ -2902,15 +2913,9 @@ namespace RestaurantInfrastructure.Models
                     }
                 </td>
                 <td>
-                    @if (User.IsInRole("Admin") || User.IsInRole("Chef"))
-                    {
-                        <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> <span>|</span>
-                    }
-                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a>
-                    @if (User.IsInRole("Admin"))
-                    {
-                        <span>|</span> <a asp-action="Delete" asp-route-id="@ LEGAL
-                    }
+                    <a asp-action="Edit" asp-route-id="@item.Id">Редагувати</a> |
+                    <a asp-action="Details" asp-route-id="@item.Id">Деталі</a> |
+                    <a asp-action="Delete" asp-route-id="@item.Id">Видалити</a>
                 </td>
             </tr>
         }
@@ -3040,11 +3045,7 @@ namespace RestaurantInfrastructure.Models
                 <input asp-for="Contacts" class="form-control" placeholder="+380xxxxxxxxx" />
                 <span asp-validation-for="Contacts" class="text-danger"></span>
             </div>
-            <div class="form-group">
-                <label asp-for="Reviews" class="control-label"></label>
-                <textarea asp-for="Reviews" class="form-control" placeholder="Введіть відгуки (необов'язково)"></textarea>
-                <span asp-validation-for="Reviews" class="text-danger"></span>
-            </div>
+           
             <div class="form-group">
                 <input type="submit" value="Додати" class="btn btn-primary" />
             </div>
@@ -3088,12 +3089,7 @@ namespace RestaurantInfrastructure.Models
         <dd class="col-sm-10">
             @Html.DisplayFor(model => model.Contacts)
         </dd>
-        <dt class="col-sm-2">
-            @Html.DisplayNameFor(model => model.Reviews)
-        </dt>
-        <dd class="col-sm-10">
-            @Html.DisplayFor(model => model.Reviews)
-        </dd>
+       
         <dt class="col-sm-2">
             Кухарі
         </dt>
@@ -3147,20 +3143,7 @@ namespace RestaurantInfrastructure.Models
         <dd class="col-sm-10">
             @Html.DisplayFor(model => model.Contacts)
         </dd>
-        <dt class="col-sm-2">
-            @Html.DisplayNameFor(model => model.Reviews)
-        </dt>
-        <dd class="col-sm-10">
-            @if (string.IsNullOrEmpty(Model.Reviews))
-            {
-                <span>Немає відгуків.</span>
-            }
-            else
-            {
-                @Html.DisplayFor(model => model.Reviews)
-            }
-        </dd>
-    </dl>
+     
 </div>
 <div>
     @if (User.IsInRole("Admin"))
@@ -3200,11 +3183,7 @@ namespace RestaurantInfrastructure.Models
                 <input asp-for="Contacts" class="form-control" placeholder="+380xxxxxxxxx" />
                 <span asp-validation-for="Contacts" class="text-danger"></span>
             </div>
-            <div class="form-group">
-                <label asp-for="Reviews" class="control-label"></label>
-                <textarea asp-for="Reviews" class="form-control" placeholder="Введіть відгуки (необов'язково)"></textarea>
-                <span asp-validation-for="Reviews" class="text-danger"></span>
-            </div>
+           
             <div class="form-group">
                 <input type="submit" value="Зберегти" class="btn btn-primary" />
             </div>
@@ -3246,9 +3225,7 @@ namespace RestaurantInfrastructure.Models
             <th>
                 @Html.DisplayNameFor(model => model.Contacts)
             </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Reviews)
-            </th>
+            
             <th></th>
         </tr>
     </thead>
@@ -3262,16 +3239,7 @@ namespace RestaurantInfrastructure.Models
                 <td>
                     @Html.DisplayFor(modelItem => item.Contacts)
                 </td>
-                <td>
-                    @if (string.IsNullOrEmpty(item.Reviews))
-                    {
-                        <span>Немає відгуків.</span>
-                    }
-                    else
-                    {
-                        @Html.DisplayFor(modelItem => item.Reviews)
-                    }
-                </td>
+                
                 <td>
                     @if (User.IsInRole("Admin"))
                     {
@@ -3325,51 +3293,79 @@ namespace RestaurantInfrastructure.Models
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - RestaurantInfrastructure</title>
+    <title>@ViewData["Title"] - Сом Валера Вітає!</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" />
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">RestaurantInfrastructure</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
+        <nav class="navbar navbar-expand-sm navbar-light bg-light">
+            <div class="container">
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index">Головна</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Головна</a>
-                        </li>
-                        @if (User.Identity.IsAuthenticated)
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                        @if (User.Identity != null && User.Identity.IsAuthenticated)
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Restaurants" asp-action="Index">Ресторани</a>
+                                <a class="nav-link" asp-controller="Restaurants" asp-action="Index">Ресторани</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Dishes" asp-action="Index">Страви</a>
+                                <a class="nav-link" asp-controller="Dishes" asp-action="Index">Страви</a>
+                            </li>
+
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Categories" asp-action="Index">Категорії</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Ingredients" asp-action="Index">Інгредієнти</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Cooks" asp-action="Index">Кухарі</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Reports" asp-action="Index">Звіти</a>
+                                </li>
+                            }
+                            else if (User.IsInRole("Chef"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Ingredients" asp-action="Index">Інгредієнти</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Cooks" asp-action="Index">Кухарі</a>
+                                </li>
+                            }
+                        }
+                    </ul>
+                    <ul class="navbar-nav">
+                        @if (User.Identity != null && User.Identity.IsAuthenticated)
+                        {
+                            <li class="nav-item">
+                                <form asp-controller="Account" asp-action="Logout" method="post" class="form-inline">
+                                    <button type="submit" class="btn btn-link nav-link" style="border: none;">Вийти</button>
+                                </form>
                             </li>
                         }
-                        @if (User.IsInRole("Admin") || User.IsInRole("Chef"))
+                        else
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Categories" asp-action="Index">Категорії</a>
+                                <a class="nav-link" asp-controller="Account" asp-action="Login">Вхід</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Ingredients" asp-action="Index">Інгредієнти</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Cooks" asp-action="Index">Кухарі</a>
+                                <a class="nav-link" asp-controller="Account" asp-action="Register">Реєстрація</a>
                             </li>
                         }
                     </ul>
-                    <partial name="_LoginPartial" />
                 </div>
             </div>
         </nav>
     </header>
+
     <div class="container">
         <main role="main" class="pb-3">
             @RenderBody()
@@ -3378,15 +3374,18 @@ namespace RestaurantInfrastructure.Models
 
     <footer class="border-top footer text-muted">
         <div class="container">
-            &copy; 2025 - RestaurantInfrastructure - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            &copy; 2025 - Сом Валера
         </div>
     </footer>
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-    @await RenderSectionAsync("Scripts", required: false)
+    <script src="~/js/site.js"></script>
+
+    @RenderSection("Scripts", required: false)
 </body>
 </html>
+
 
 // ==== Views\Shared\_Layout.cshtml.css ====
 /* Please see documentation at https://learn.microsoft.com/aspnet/core/client-side/bundling-and-minification

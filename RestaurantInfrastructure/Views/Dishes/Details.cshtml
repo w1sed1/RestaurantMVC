@@ -43,6 +43,9 @@
     </dl>
 </div>
 <div>
-    <a asp-action="Edit" asp-route-id="@Model?.Id">Редагувати</a> |
+    @if (!User.IsInRole("Admin"))
+    {
+        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary">Редагувати</a>
+    }
     <a asp-action="Index">Повернутися до списку</a>
 </div>

@@ -11,6 +11,8 @@ namespace RestaurantInfrastructure
     {
         public async Task<MemoryStream> ExportToExcelAsync(RestaurantDbContext context, bool exportCategories, bool exportCooks, bool exportDishes, bool exportIngredients, bool exportRestaurants)
         {
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial; // Встановлюємо ліцензію
+
             using var package = new ExcelPackage();
 
             if (exportCategories)
